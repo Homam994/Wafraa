@@ -192,14 +192,14 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);z-index:300;display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .25s}
 .modal-overlay.open{opacity:1;pointer-events:all}
-.modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:500px;max-height:92vh;overflow-y:auto;transform:translateY(20px);transition:transform .25s;position:relative}
+.modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:500px;max-height:90vh;display:flex;flex-direction:column;transform:translateY(20px);transition:transform .25s;position:relative;overflow:hidden}
 .modal-overlay.open .modal{transform:translateY(0)}
-.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent)}
-.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.5rem 1.75rem 0}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);z-index:1;pointer-events:none}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.5rem 1.75rem 0;flex-shrink:0}
 .modal-title{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:600}
 .modal-close{background:var(--obsidian-3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all .2s;flex-shrink:0}
 .modal-close:hover{border-color:var(--border-hover);color:var(--text-primary)}
-.modal-body{padding:1.5rem 1.75rem}
+.modal-body{padding:1.5rem 1.75rem;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 
 /* Step indicator */
 .step-indicator{display:flex;align-items:center;gap:0;margin-bottom:1.75rem}
@@ -256,8 +256,27 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .btn-next:hover{opacity:.9}
 .btn-next:disabled{opacity:.4;cursor:not-allowed}
 
-/* Summary box */
-.tx-summary{background:var(--obsidian-3);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.25rem}
+/* ── CONFIRM DIALOG ── */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:600;display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .2s}
+.confirm-overlay.open{opacity:1;pointer-events:all}
+.confirm-box{background:var(--obsidian-2);border:1px solid var(--border);border-radius:16px;padding:1.75rem;width:100%;max-width:340px;text-align:center}
+.confirm-icon{font-size:2.5rem;margin-bottom:.75rem}
+.confirm-title{font-size:1.05rem;font-weight:600;margin-bottom:.4rem}
+.confirm-msg{font-size:.85rem;color:var(--text-muted);line-height:1.5;margin-bottom:1.25rem}
+.confirm-btns{display:flex;gap:.75rem}
+.confirm-cancel{flex:1;padding:.7rem;background:var(--obsidian-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-family:'Tajawal',sans-serif;font-size:.9rem;cursor:pointer;transition:all .2s}
+.confirm-cancel:hover{border-color:var(--border-hover)}
+.confirm-ok{flex:1;padding:.7rem;background:linear-gradient(135deg,#e05c5c,#b33);border:none;border-radius:var(--radius-sm);color:#fff;font-family:'Tajawal',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s}
+.confirm-ok:hover{opacity:.88}
+
+/* Edit/delete action buttons on tx items */
+.tx-actions{display:flex;gap:.3rem;opacity:0;transition:opacity .2s}
+.tx-item:hover .tx-actions{opacity:1}
+.tx-action-btn{background:none;border:none;cursor:pointer;padding:5px;border-radius:6px;color:var(--text-muted);transition:all .2s;display:flex;align-items:center;justify-content:center}
+.tx-action-btn:hover.edit{color:var(--gold)}
+.tx-action-btn:hover.del{color:var(--danger)}
+/* Always show on touch devices */
+@media(hover:none){.tx-actions{opacity:1}}
 .tx-summary-row{display:flex;align-items:center;justify-content:space-between;font-size:.88rem;padding:.3rem 0}
 .tx-summary-row span:first-child{color:var(--text-muted)}
 .tx-summary-row span:last-child{font-weight:600}
@@ -697,7 +716,20 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
   </nav>
 </div>
 
-<!-- ── ADD MODAL (4 STEPS) ── -->
+<!-- ── CONFIRM DELETE DIALOG ── -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-title">حذف المعاملة</div>
+    <div class="confirm-msg">هل أنت متأكد من حذف هذه المعاملة؟<br>لا يمكن التراجع عن هذا الإجراء.</div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="closeConfirm()">إلغاء</button>
+      <button class="confirm-ok" id="confirm-ok-btn">حذف</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD / EDIT MODAL (4 STEPS) ── -->
 <div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
   <div class="modal">
     <div class="modal-header">
@@ -842,6 +874,7 @@ let txAmount   = null;
 let txType     = null;
 let txMainCat  = null;
 let txSubCat   = null;
+let editingTxId = null; // null = new, string = editing existing
 
 // ════════════════════════════════════════
 //  DATA LAYER  (Firebase Firestore)
@@ -875,6 +908,11 @@ function fbListenTx(uid) {
 async function fbAddTx(uid, tx) {
   const { db, collection, addDoc } = F();
   await addDoc(collection(db, 'users', uid, 'transactions'), tx);
+}
+
+async function fbUpdateTx(uid, id, data) {
+  const { db, doc, setDoc } = F();
+  await setDoc(doc(db, 'users', uid, 'transactions', id), data, { merge: true });
 }
 
 async function fbDeleteTx(uid, id) {
@@ -1073,14 +1111,41 @@ function renderPage(name) {
 //  MODAL — 4 STEP FLOW
 // ════════════════════════════════════════
 function openModal(forceType) {
+  editingTxId = null;
   resetModal();
+  document.getElementById('modal-title-text').textContent = 'معاملة جديدة';
   if (forceType) { selectType(forceType); goStep(2); }
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('tx-amount').focus(), 100);
+  setTimeout(() => document.getElementById('tx-amount').focus(), 150);
+}
+
+function openEditModal(id) {
+  const tx = transactions.find(t => t.id === id);
+  if (!tx) return;
+  editingTxId = id;
+  resetModal();
+  document.getElementById('modal-title-text').textContent = 'تعديل المعاملة';
+  // Pre-fill state
+  txAmount  = tx.amount;
+  txType    = tx.type;
+  txMainCat = tx.cat;
+  txSubCat  = tx.sub || null;
+  // Pre-fill inputs
+  document.getElementById('tx-amount').value = tx.amount;
+  document.getElementById('tx-date').value   = tx.date;
+  document.getElementById('tx-note').value   = tx.note || '';
+  // Update type cards
+  document.getElementById('tc-expense').className = 'type-card'+(txType==='expense'?' selected-expense':'');
+  document.getElementById('tc-income').className  = 'type-card'+(txType==='income'?' selected-income':'');
+  const n = document.getElementById('btn-step1-next');
+  if (n) n.disabled = false;
+  document.getElementById('modal-overlay').classList.add('open');
+  goStep(4); // jump straight to summary+subcat
 }
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
+  editingTxId = null;
   resetModal();
 }
 
@@ -1089,8 +1154,8 @@ function handleOverlayClick(e) { if (e.target===e.currentTarget) closeModal(); }
 function resetModal() {
   step=1; txAmount=null; txType=null; txMainCat=null; txSubCat=null;
   document.getElementById('tx-amount').value = '';
-  document.getElementById('tx-note').value = '';
-  document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('tx-note').value   = '';
+  document.getElementById('tx-date').value   = new Date().toISOString().split('T')[0];
   document.getElementById('tc-expense').className = 'type-card';
   document.getElementById('tc-income').className  = 'type-card';
   const n = document.getElementById('btn-step1-next');
@@ -1187,7 +1252,7 @@ function pickSubCat(label, btn) {
 async function saveTransaction() {
   if (!txAmount || !txType || !txMainCat) { showToast('أكمل جميع الخطوات','error'); return; }
   const btn = document.getElementById('btn-save');
-  btn.disabled = true; btn.textContent = '⏳ جارٍ الحفظ...';
+  btn.disabled = true; btn.textContent = editingTxId ? '⏳ جارٍ التعديل...' : '⏳ جارٍ الحفظ...';
   try {
     const tx = {
       type:      txType,
@@ -1196,23 +1261,53 @@ async function saveTransaction() {
       amount:    txAmount,
       note:      document.getElementById('tx-note').value.trim(),
       date:      document.getElementById('tx-date').value || new Date().toISOString().split('T')[0],
-      createdAt: new Date().toISOString()
+      createdAt: editingTxId
+        ? (transactions.find(t=>t.id===editingTxId)?.createdAt || new Date().toISOString())
+        : new Date().toISOString(),
+      updatedAt: editingTxId ? new Date().toISOString() : null
     };
-    await fbAddTx(currentUser.uid, tx);
+    if (editingTxId) {
+      await fbUpdateTx(currentUser.uid, editingTxId, tx);
+      showToast('تم تعديل المعاملة ✓','success');
+    } else {
+      await fbAddTx(currentUser.uid, tx);
+      showToast('تم حفظ المعاملة ✓','success');
+    }
     closeModal();
-    showToast('تم حفظ المعاملة ✓','success');
   } catch(e) {
     console.error(e);
-    showToast('فشل الحفظ، تحقق من الاتصال','error');
-    btn.disabled = false; btn.textContent = '💾 حفظ المعاملة';
+    showToast('فشلت العملية، تحقق من الاتصال','error');
+    btn.disabled = false;
+    btn.textContent = editingTxId ? '💾 حفظ التعديل' : '💾 حفظ';
   }
 }
 
-async function deleteTx(id) {
+// ── Confirm Delete ──
+let _pendingDeleteId = null;
+
+function confirmDelete(id) {
+  _pendingDeleteId = id;
+  document.getElementById('confirm-overlay').classList.add('open');
+  document.getElementById('confirm-ok-btn').onclick = executeDelete;
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  _pendingDeleteId = null;
+}
+
+async function executeDelete() {
+  if (!_pendingDeleteId) return;
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = '...'; btn.disabled = true;
   try {
-    await fbDeleteTx(currentUser.uid, id);
-    showToast('تم الحذف','success');
-  } catch(e) { showToast('فشل الحذف','error'); }
+    await fbDeleteTx(currentUser.uid, _pendingDeleteId);
+    showToast('تم حذف المعاملة','success');
+  } catch(e) {
+    showToast('فشل الحذف','error');
+  }
+  closeConfirm();
+  btn.textContent = 'حذف'; btn.disabled = false;
 }
 
 // ════════════════════════════════════════
@@ -1234,9 +1329,14 @@ function renderTxItem(tx) {
       <div class="tx-sub">${meta.label} · ${dateStr}</div>
     </div>
     <div class="tx-amount ${isInc?'income':'expense'}">${isInc?'+':'-'}${fmt(tx.amount)}</div>
-    <button class="tx-delete" onclick="deleteTx('${tx.id}')" title="حذف">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-    </button>
+    <div class="tx-actions">
+      <button class="tx-action-btn edit" onclick="openEditModal('${tx.id}')" title="تعديل">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="tx-action-btn del" onclick="confirmDelete('${tx.id}')" title="حذف">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+      </button>
+    </div>
   </div>`;
 }
 
