@@ -22,7 +22,8 @@
 import { initializeApp }                                     from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword,
          signInWithEmailAndPassword, signOut,
-         onAuthStateChanged, updateProfile }                 from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+         onAuthStateChanged, updateProfile,
+         sendPasswordResetEmail }                           from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc,
          collection, addDoc, deleteDoc,
          query, orderBy, onSnapshot }                       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
@@ -42,7 +43,7 @@ const db   = getFirestore(app);
 
 window._fire = { auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signOut, onAuthStateChanged, updateProfile,
+  signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail,
   doc, setDoc, getDoc, collection, addDoc, deleteDoc,
   query, orderBy, onSnapshot
 };
@@ -248,7 +249,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .subcat-btn.selected{border-color:var(--gold-dim);background:rgba(201,168,76,.12);color:var(--gold-light)}
 
 /* Step nav */
-.step-nav{display:flex;gap:.75rem;margin-top:1.25rem}
+.step-nav{display:flex;gap:.75rem;margin-top:1.25rem;padding-bottom:.5rem}
 .btn-back{flex:1;padding:.75rem;background:var(--obsidian-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-family:'Tajawal',sans-serif;font-size:.95rem;cursor:pointer;transition:all .2s}
 .btn-back:hover{border-color:var(--border-hover);color:var(--text-primary)}
 .btn-next{flex:2;padding:.75rem;background:linear-gradient(135deg,var(--gold),var(--gold-dim));border:none;border-radius:var(--radius-sm);color:var(--obsidian);font-family:'Tajawal',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;transition:opacity .2s}
@@ -432,6 +433,26 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
         <input class="form-input" type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
       <button class="btn-gold" id="login-btn" onclick="doLogin()">دخول</button>
+      <div style="text-align:center;margin-top:.85rem">
+        <span onclick="showResetForm()" style="font-size:.82rem;color:var(--gold-dim);cursor:pointer;text-decoration:underline;text-underline-offset:3px">نسيت كلمة المرور؟</span>
+      </div>
+    </div>
+
+    <!-- Reset password form -->
+    <div id="reset-form" style="display:none">
+      <div style="text-align:center;margin-bottom:1.25rem">
+        <div style="font-size:2rem;margin-bottom:.5rem">🔑</div>
+        <div style="font-size:.95rem;font-weight:600;color:var(--text-primary)">إعادة تعيين كلمة المرور</div>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-top:.35rem;line-height:1.5">أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">البريد الإلكتروني</label>
+        <input class="form-input" type="email" id="reset-email" placeholder="example@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')doResetPassword()">
+      </div>
+      <button class="btn-gold" id="reset-btn" onclick="doResetPassword()">إرسال رابط الاسترداد</button>
+      <div style="text-align:center;margin-top:.85rem">
+        <span onclick="hideResetForm()" style="font-size:.82rem;color:var(--text-muted);cursor:pointer">← العودة لتسجيل الدخول</span>
+      </div>
     </div>
     <div id="register-form" style="display:none">
       <div class="form-group">
@@ -868,7 +889,49 @@ function switchAuth(tab) {
   document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', i === (tab==='login'?0:1)));
   document.getElementById('login-form').style.display    = tab==='login'    ? '' : 'none';
   document.getElementById('register-form').style.display = tab==='register' ? '' : 'none';
+  document.getElementById('reset-form').style.display    = 'none';
   document.getElementById('auth-msg').textContent = '';
+}
+
+function showResetForm() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('reset-form').style.display = '';
+  // pre-fill email if already typed
+  const email = document.getElementById('login-email').value.trim();
+  if (email) document.getElementById('reset-email').value = email;
+  document.getElementById('auth-msg').textContent = '';
+  document.getElementById('reset-email').focus();
+}
+
+function hideResetForm() {
+  document.getElementById('reset-form').style.display = 'none';
+  document.getElementById('login-form').style.display = '';
+  document.getElementById('auth-msg').textContent = '';
+}
+
+async function doResetPassword() {
+  const email = document.getElementById('reset-email').value.trim();
+  if (!email) { showAuthMsg('أدخل بريدك الإلكتروني', 'error'); return; }
+  const btn = document.getElementById('reset-btn');
+  btn.disabled = true; btn.textContent = 'جارٍ الإرسال...';
+  try {
+    const { auth, sendPasswordResetEmail } = F();
+    await sendPasswordResetEmail(auth, email, {
+      // Optional: redirect back to app after reset
+      url: window.location.href
+    });
+    showAuthMsg('✅ تم الإرسال! تحقق من بريدك الإلكتروني', 'success');
+    btn.textContent = 'تم الإرسال ✓';
+    // Auto go back to login after 3 seconds
+    setTimeout(() => {
+      hideResetForm();
+      document.getElementById('login-email').value = email;
+      showAuthMsg('تم إرسال رابط الاسترداد، تحقق من بريدك', 'success');
+    }, 3000);
+  } catch(e) {
+    showAuthMsg(authErrMsg(e.code), 'error');
+    btn.disabled = false; btn.textContent = 'إرسال رابط الاسترداد';
+  }
 }
 
 async function doLogin() {
@@ -910,14 +973,15 @@ async function doRegister() {
 
 function authErrMsg(code) {
   const m = {
-    'auth/user-not-found'       : 'لا يوجد حساب بهذا البريد',
-    'auth/wrong-password'       : 'كلمة المرور غير صحيحة',
-    'auth/invalid-credential'   : 'البريد أو كلمة المرور غير صحيحة',
-    'auth/email-already-in-use' : 'هذا البريد مسجل مسبقاً',
-    'auth/invalid-email'        : 'صيغة البريد غير صحيحة',
-    'auth/weak-password'        : 'كلمة مرور ضعيفة جداً',
-    'auth/too-many-requests'    : 'محاولات كثيرة، انتظر قليلاً',
+    'auth/user-not-found'        : 'لا يوجد حساب بهذا البريد',
+    'auth/wrong-password'        : 'كلمة المرور غير صحيحة',
+    'auth/invalid-credential'    : 'البريد أو كلمة المرور غير صحيحة',
+    'auth/email-already-in-use'  : 'هذا البريد مسجل مسبقاً',
+    'auth/invalid-email'         : 'صيغة البريد غير صحيحة',
+    'auth/weak-password'         : 'كلمة مرور ضعيفة جداً',
+    'auth/too-many-requests'     : 'محاولات كثيرة، انتظر قليلاً ثم أعد المحاولة',
     'auth/network-request-failed': 'تحقق من اتصالك بالإنترنت',
+    'auth/missing-email'         : 'أدخل البريد الإلكتروني أولاً',
   };
   return m[code] || ('خطأ: ' + (code || 'غير معروف'));
 }
