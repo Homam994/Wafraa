@@ -190,7 +190,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .tx-delete:hover{color:var(--danger)}
 
 /* ── MODAL ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);z-index:300;display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);z-index:600;display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .25s}
 .modal-overlay.open{opacity:1;pointer-events:all}
 .modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:500px;max-height:88vh;display:flex;flex-direction:column;transform:translateY(20px);transition:transform .25s;position:relative;overflow:clip}
 .modal-overlay.open .modal{transform:translateY(0)}
@@ -333,7 +333,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .theme-btn svg{width:18px;height:18px}
 
 /* ── BOTTOM NAV ── */
-.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--obsidian-2);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:var(--obsidian-2);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
 .bottom-nav-inner{display:flex;align-items:center;justify-content:space-around;height:60px;padding:0 4px}
 .bnav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;flex:1;height:100%;cursor:pointer;color:var(--text-muted);transition:color .2s;-webkit-tap-highlight-color:transparent}
 .bnav-item svg{width:22px;height:22px;flex-shrink:0}
@@ -348,7 +348,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .sidebar-overlay.show{display:block}
 
 /* ── MOBILE HEADER ── */
-#mobile-header{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--obsidian-2);border-bottom:1px solid var(--border);z-index:200;align-items:center;justify-content:space-between;padding:0 1rem}
+#mobile-header{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--obsidian-2);border-bottom:1px solid var(--border);z-index:190;align-items:center;justify-content:space-between;padding:0 1rem}
 
 /* Toast */
 #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--obsidian-3);border:1px solid var(--border);border-radius:10px;padding:.75rem 1.5rem;font-size:.88rem;font-weight:500;z-index:1000;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
@@ -510,7 +510,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 
 <!-- APP -->
 <div id="app">
-  <div style="position:fixed;top:0;left:0;right:0;height:52px;background:var(--obsidian-2);border-bottom:1px solid var(--border);z-index:160;display:flex;align-items:center;justify-content:space-between;padding:0 1rem" id="mobile-header">
+  <div style="position:fixed;top:0;left:0;right:0;height:52px;background:var(--obsidian-2);border-bottom:1px solid var(--border);z-index:190;display:flex;align-items:center;justify-content:space-between;padding:0 1rem" id="mobile-header">
     <button class="sidebar-toggle" style="position:static" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
@@ -610,6 +610,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
           <div class="card">
             <div class="section-header"><div class="section-title">المصاريف (6 أشهر)</div></div>
             <div class="chart-container" id="bar-chart"></div>
+            <div id="bar-chart-legend" style="display:flex;gap:1rem;margin-top:.5rem;justify-content:center"></div>
           </div>
           <div class="card">
             <div class="section-header"><div class="section-title">توزيع المصاريف</div></div>
@@ -943,10 +944,7 @@ async function doResetPassword() {
   btn.disabled = true; btn.textContent = 'جارٍ الإرسال...';
   try {
     const { auth, sendPasswordResetEmail } = F();
-    await sendPasswordResetEmail(auth, email, {
-      // Optional: redirect back to app after reset
-      url: window.location.href
-    });
+    await sendPasswordResetEmail(auth, email);
     showAuthMsg('✅ تم الإرسال! تحقق من بريدك الإلكتروني', 'success');
     btn.textContent = 'تم الإرسال ✓';
     // Auto go back to login after 3 seconds
@@ -1402,16 +1400,14 @@ function renderBarChart() {
       <div class="chart-label">${m.label}</div>
     </div>`;
   }).join('');
-  // Add legend
-  bc.insertAdjacentHTML('afterend', `
-    <div style="display:flex;gap:1rem;margin-top:.5rem;justify-content:center">
-      <span style="font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem">
-        <span style="width:10px;height:10px;background:var(--danger);border-radius:2px;display:inline-block;opacity:.85"></span>مصاريف
-      </span>
-      <span style="font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem">
-        <span style="width:10px;height:10px;background:var(--success);border-radius:2px;display:inline-block;opacity:.85"></span>مداخيل
-      </span>
-    </div>`);
+  const legend = document.getElementById('bar-chart-legend');
+  if (legend) legend.innerHTML = `
+    <span style="font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem">
+      <span style="width:10px;height:10px;background:var(--danger);border-radius:2px;display:inline-block;opacity:.85"></span>مصاريف
+    </span>
+    <span style="font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem">
+      <span style="width:10px;height:10px;background:var(--success);border-radius:2px;display:inline-block;opacity:.85"></span>مداخيل
+    </span>`;
 }
 
 function renderDonut(txs) {
