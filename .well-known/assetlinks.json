@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "app.vercel.wafraa.twa",
-        "sha256_cert_fingerprints": ["0F:27:61:0F:71:F1:E8:D3:E9:61:FB:F6:B4:CE:C0:A8:4B:F6:E3:D9:8C:FF:87:72:57:15:ED:B6:D4:F6:89:97"]
+        "sha256_cert_fingerprints": ["3E:A2:15:A5:8A:92:59:5B:EE:7F:1A:50:84:44:B8:A4:66:8F:A4:1A:D9:9B:CA:DE:9E:D8:A8:03:36:0A:BE:DB"]
       }
     }]
