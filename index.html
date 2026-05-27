@@ -211,10 +211,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 .step-line.done{background:var(--success)}
 .step-label{font-size:.7rem;color:var(--text-muted);text-align:center;margin-top:.3rem}
 
-/* Step panels */
-.step-panel{display:none;animation:fadeIn .2s ease}
-.step-panel.active{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
 
 /* Amount big input */
 .amount-big-wrap{position:relative;margin-bottom:.5rem}
@@ -223,16 +220,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 .amount-big::placeholder{color:var(--text-muted);font-size:1.5rem}
 .amount-cur{position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:.9rem;color:var(--gold-dim);font-weight:600;font-family:'Tajawal',sans-serif}
 
-/* Type toggle */
-.type-toggle{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem}
-.type-card{padding:1.25rem 1rem;border-radius:12px;border:2px solid var(--border);background:var(--obsidian-3);cursor:pointer;transition:all .2s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:.5rem}
-.type-card:hover{border-color:var(--border-hover)}
-.type-card.selected-expense{border-color:var(--danger);background:rgba(224,92,92,.08)}
-.type-card.selected-income{border-color:var(--success);background:rgba(76,175,130,.08)}
-.type-card-icon{font-size:2rem}
-.type-card-label{font-size:.95rem;font-weight:600;color:var(--text-secondary)}
-.type-card.selected-expense .type-card-label{color:var(--danger)}
-.type-card.selected-income .type-card-label{color:var(--success)}
+
 
 /* Category main grid */
 .main-cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;margin-bottom:1.25rem}
@@ -430,6 +418,42 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   .grid-4{grid-template-columns:repeat(2,1fr)}
   .stat-value{font-size:1rem}
 }
+
+/* ── QUICK-ADD MODAL (single screen) ── */
+.modal-type-tab{display:flex;background:var(--obsidian-3);border-radius:10px;padding:3px;margin-bottom:1.1rem}
+.modal-type-btn{flex:1;padding:.55rem;border:none;border-radius:8px;background:transparent;font-family:'Tajawal',sans-serif;font-size:.95rem;font-weight:600;cursor:pointer;transition:all .2s;color:var(--text-muted)}
+.modal-type-btn.active-expense{background:rgba(224,92,92,.18);color:var(--danger)}
+.modal-type-btn.active-income{background:rgba(76,175,130,.18);color:var(--success)}
+
+/* Cat picker inline */
+.cat-picker-row{display:flex;align-items:center;gap:.6rem;padding:.65rem .9rem;background:var(--obsidian-3);border:1.5px solid var(--border);border-radius:10px;cursor:pointer;transition:all .2s;margin-bottom:.9rem}
+.cat-picker-row:hover{border-color:var(--border-hover)}
+.cat-picker-icon{font-size:1.4rem;flex-shrink:0}
+.cat-picker-info{flex:1;min-width:0}
+.cat-picker-main{font-size:.88rem;font-weight:600}
+.cat-picker-sub{font-size:.75rem;color:var(--text-muted);margin-top:1px}
+.cat-picker-arrow{color:var(--text-muted);transition:transform .2s;flex-shrink:0}
+.cat-picker-row.open .cat-picker-arrow{transform:rotate(90deg)}
+
+/* Inline cat sheet */
+.cat-sheet{display:none;background:var(--obsidian-2);border:1px solid var(--border);border-radius:12px;padding:.85rem;margin-top:-.5rem;margin-bottom:.85rem}
+.cat-sheet.open{display:block;animation:fadeIn .15s ease}
+.cat-sheet-section{margin-bottom:.85rem}
+.cat-sheet-title{font-size:.68rem;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:.5rem}
+.cat-sheet-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem}
+.csg-btn{display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.55rem .3rem;background:var(--obsidian-3);border:1.5px solid transparent;border-radius:8px;cursor:pointer;transition:all .15s;font-family:'Tajawal',sans-serif;font-size:.7rem;color:var(--text-secondary);text-align:center;line-height:1.2}
+.csg-btn .ce{font-size:1.2rem}
+.csg-btn:hover{border-color:var(--border-hover);color:var(--text-primary)}
+.csg-btn.sel{border-color:var(--gold-dim);background:rgba(201,168,76,.12);color:var(--gold-light)}
+/* subcat */
+.subcat-sheet{border-top:1px solid var(--border);padding-top:.75rem;margin-top:.75rem}
+.subcat-sheet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem}
+.ssb{display:flex;align-items:center;gap:.4rem;padding:.45rem .55rem;background:var(--obsidian-3);border:1.5px solid transparent;border-radius:8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:.78rem;color:var(--text-secondary);transition:all .15s}
+.ssb .se{font-size:1rem;flex-shrink:0}
+.ssb:hover{border-color:var(--border-hover);color:var(--text-primary)}
+.ssb.sel{border-color:var(--gold-dim);background:rgba(201,168,76,.12);color:var(--gold-light)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -748,7 +772,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   </div>
 </div>
 
-<!-- ── ADD / EDIT MODAL (4 STEPS) ── -->
+<!-- ── QUICK-ADD MODAL ── -->
 <div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
   <div class="modal">
     <div class="modal-header">
@@ -759,72 +783,61 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
     </div>
     <div class="modal-body">
 
-      <!-- Step indicator -->
-      <div style="margin-bottom:1.5rem">
-        <div class="step-indicator">
-          <div class="step-dot active" id="sdot-1">١</div>
-          <div class="step-line" id="sline-1"></div>
-          <div class="step-dot" id="sdot-2">٢</div>
-          <div class="step-line" id="sline-2"></div>
-          <div class="step-dot" id="sdot-3">٣</div>
-          <div class="step-line" id="sline-3"></div>
-          <div class="step-dot" id="sdot-4">٤</div>
+      <!-- المبلغ -->
+      <div class="amount-big-wrap" style="margin-bottom:.9rem">
+        <input class="amount-big" type="number" id="tx-amount" placeholder="0.00"
+          min="0" step="0.01" inputmode="decimal"
+          oninput="onAmountInput()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('tx-note').focus()}">
+        <span class="amount-cur" id="tx-currency-label">SAR</span>
+      </div>
+
+      <!-- مصروف / دخل tabs -->
+      <div class="modal-type-tab">
+        <button class="modal-type-btn" id="mtb-expense" onclick="qSetType('expense')">📤 مصروف</button>
+        <button class="modal-type-btn" id="mtb-income"  onclick="qSetType('income')">📥 دخل</button>
+      </div>
+
+      <!-- التصنيف — row قابل للنقر -->
+      <div class="cat-picker-row" id="cat-picker-row" onclick="toggleCatSheet()">
+        <span class="cat-picker-icon" id="cp-icon">🏷️</span>
+        <div class="cat-picker-info">
+          <div class="cat-picker-main" id="cp-main">اختر التصنيف</div>
+          <div class="cat-picker-sub"  id="cp-sub">اضغط لاختيار النوع والتصنيف الفرعي</div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:.35rem">
-          <span style="font-size:.65rem;color:var(--text-muted);flex:1;text-align:center">المبلغ</span>
-          <span style="font-size:.65rem;color:var(--text-muted);flex:1;text-align:center">النوع</span>
-          <span style="font-size:.65rem;color:var(--text-muted);flex:1;text-align:center">التصنيف</span>
-          <span style="font-size:.65rem;color:var(--text-muted);flex:1;text-align:center">التفاصيل</span>
+        <svg class="cat-picker-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+
+      <!-- ورقة التصنيفات المنسدلة -->
+      <div class="cat-sheet" id="cat-sheet">
+        <div id="cat-sheet-content"></div>
+        <!-- تصنيفات فرعية تظهر بعد اختيار الرئيسي -->
+        <div class="subcat-sheet" id="subcat-sheet" style="display:none">
+          <div class="cat-sheet-title" style="margin-bottom:.5rem">التصنيف الفرعي</div>
+          <div class="subcat-sheet-grid" id="subcat-sheet-grid"></div>
         </div>
       </div>
 
-      <!-- STEP 1: Amount -->
-      <!-- scrollable content -->
-      <div id="step-1" class="step-panel active">
-        <div class="form-label" style="margin-bottom:.5rem;font-size:.85rem;color:var(--text-muted)">أدخل المبلغ ثم اضغط التالي أو Enter</div>
-        <div class="amount-big-wrap">
-          <input class="amount-big" type="number" id="tx-amount" placeholder="0.00" min="0" step="0.01"
-            oninput="checkAmountStep()"
-            onkeydown="if(event.key==='Enter'&&txAmount){event.preventDefault();goStep(2)}">
-          <span class="amount-cur" id="tx-currency-label">SAR</span>
-        </div>
-        <div class="form-group" style="margin-top:.85rem">
+      <!-- التاريخ والملاحظة -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.9rem">
+        <div>
           <label class="form-label">التاريخ</label>
           <input class="form-input" type="date" id="tx-date">
         </div>
-      </div>
-      <div id="step-2" class="step-panel">
-        <div class="form-label" style="margin-bottom:.75rem;font-size:.85rem;color:var(--text-muted)">اختر نوع المعاملة</div>
-        <div class="type-toggle">
-          <div class="type-card" id="tc-expense" onclick="selectType('expense');goStep(3)">
-            <span class="type-card-icon">📤</span><span class="type-card-label">مصروف</span>
-          </div>
-          <div class="type-card" id="tc-income" onclick="selectType('income');goStep(3)">
-            <span class="type-card-icon">📥</span><span class="type-card-label">دخل</span>
-          </div>
-        </div>
-      </div>
-      <div id="step-3" class="step-panel">
-        <div class="form-label" style="margin-bottom:.75rem;font-size:.85rem;color:var(--text-muted)">اختر التصنيف</div>
-        <div class="main-cat-grid" id="main-cat-grid"></div>
-      </div>
-      <div id="step-4" class="step-panel">
-        <div class="tx-summary" id="tx-summary"></div>
-        <div class="subcat-label">اختر التصنيف الفرعي (اختياري)</div>
-        <div class="subcat-grid" id="subcat-grid"></div>
-        <div class="form-group" style="margin-top:.85rem">
-          <label class="form-label">ملاحظة (اختياري)</label>
-          <input class="form-input" type="text" id="tx-note" placeholder="مثال: غداء عمل، إيجار أبريل..."
+        <div>
+          <label class="form-label">ملاحظة</label>
+          <input class="form-input" type="text" id="tx-note" placeholder="اختياري"
             onkeydown="if(event.key==='Enter')saveTransaction()">
         </div>
-      </div><!-- end modal-body -->
-
-      <!-- STICKY FOOTER NAV — always visible -->
-      <div class="modal-footer" id="modal-footer">
-        <!-- filled dynamically by goStep() -->
       </div>
 
+    </div><!-- end modal-body -->
+
+    <!-- footer ثابت -->
+    <div class="modal-footer">
+      <button class="btn-next" id="btn-save" onclick="saveTransaction()">💾 حفظ</button>
     </div>
+
   </div>
 </div>
 
@@ -873,12 +886,11 @@ let txFilter     = 'all';
 let reportYear, reportMonth;
 
 // modal state
-let step = 1;
 let txAmount   = null;
 let txType     = null;
 let txMainCat  = null;
 let txSubCat   = null;
-let editingTxId = null; // null = new, string = editing existing
+let editingTxId = null;
 
 // ════════════════════════════════════════
 //  DATA LAYER  (Firebase Firestore)
@@ -1111,167 +1123,178 @@ function renderPage(name) {
 // ════════════════════════════════════════
 //  MODAL — 4 STEP FLOW
 // ════════════════════════════════════════
+// ── last-used memory (persists across sessions) ──
+function getLastUsed() {
+  try { return JSON.parse(localStorage.getItem('wafra_lastused')) || {}; } catch { return {}; }
+}
+function saveLastUsed(obj) {
+  const cur = getLastUsed();
+  localStorage.setItem('wafra_lastused', JSON.stringify({...cur, ...obj}));
+}
+
+// ── open / close ──
 function openModal(forceType) {
   editingTxId = null;
-  resetModal();
+  const last = getLastUsed();
+  txType    = forceType || last.type    || 'expense';
+  txMainCat = last[txType+'Cat']        || null;
+  txSubCat  = last[txType+'Sub']        || null;
+  txAmount  = null;
+  _resetQuickForm();
   document.getElementById('modal-title-text').textContent = 'معاملة جديدة';
-  if (forceType) { selectType(forceType); goStep(2); }
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('tx-amount').focus(), 150);
+  setTimeout(() => document.getElementById('tx-amount').focus(), 120);
 }
 
 function openEditModal(id) {
   const tx = transactions.find(t => t.id === id);
   if (!tx) return;
   editingTxId = id;
-  resetModal();
-  document.getElementById('modal-title-text').textContent = 'تعديل المعاملة';
-  // Pre-fill state
-  txAmount  = tx.amount;
   txType    = tx.type;
   txMainCat = tx.cat;
   txSubCat  = tx.sub || null;
-  // Pre-fill inputs
+  txAmount  = tx.amount;
+  document.getElementById('modal-title-text').textContent = 'تعديل المعاملة';
   document.getElementById('tx-amount').value = tx.amount;
   document.getElementById('tx-date').value   = tx.date;
   document.getElementById('tx-note').value   = tx.note || '';
-  // Update type cards
-  document.getElementById('tc-expense').className = 'type-card'+(txType==='expense'?' selected-expense':'');
-  document.getElementById('tc-income').className  = 'type-card'+(txType==='income'?' selected-income':'');
-  const n = document.getElementById('btn-step1-next');
-  if (n) n.disabled = false;
+  _applyTypeTab();
+  _applyCatRow();
   document.getElementById('modal-overlay').classList.add('open');
-  goStep(4); // jump straight to summary+subcat
 }
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
+  _closeCatSheet();
   editingTxId = null;
-  resetModal();
 }
 
-function handleOverlayClick(e) { if (e.target===e.currentTarget) closeModal(); }
+function handleOverlayClick(e) { if (e.target === e.currentTarget) closeModal(); }
 
-function resetModal() {
-  step=1; txAmount=null; txType=null; txMainCat=null; txSubCat=null;
+function _resetQuickForm() {
   document.getElementById('tx-amount').value = '';
   document.getElementById('tx-note').value   = '';
   document.getElementById('tx-date').value   = new Date().toISOString().split('T')[0];
-  document.getElementById('tc-expense').className = 'type-card';
-  document.getElementById('tc-income').className  = 'type-card';
-  const n = document.getElementById('btn-step1-next');
-  if (n) n.disabled = true;
-  goStep(1, true);
+  _applyTypeTab();
+  _applyCatRow();
+  _closeCatSheet();
 }
 
-function goStep(n, silent) {
-  step = n;
-  // Update step dots
-  for (let i=1;i<=4;i++) {
-    document.getElementById('step-'+i).classList.toggle('active', i===n);
-    const dot = document.getElementById('sdot-'+i);
-    if (i < n)        { dot.className='step-dot done';   dot.textContent='✓'; }
-    else if (i === n) { dot.className='step-dot active'; dot.textContent=['١','٢','٣','٤'][i-1]; }
-    else              { dot.className='step-dot';         dot.textContent=['١','٢','٣','٤'][i-1]; }
-    if (i<4) document.getElementById('sline-'+i).className='step-line'+(i<n?' done':'');
-  }
-  // Render footer buttons for this step
-  const footer = document.getElementById('modal-footer');
-  if (footer) {
-    if (n === 1) {
-      footer.innerHTML = `<div class="step-nav"><button class="btn-next" id="btn-step1-next" onclick="goStep(2)" disabled>التالي ←</button></div>`;
-      // re-check amount to enable/disable
-      const v = parseFloat(document.getElementById('tx-amount')?.value||'0');
-      const btn = document.getElementById('btn-step1-next');
-      if (btn) btn.disabled = !(v > 0);
-    } else if (n === 2) {
-      footer.innerHTML = `<div class="step-nav"><button class="btn-back" onclick="goStep(1)">← رجوع</button><div style="flex:2;font-size:.8rem;color:var(--text-muted);display:flex;align-items:center;justify-content:center">اختر النوع أعلاه</div></div>`;
-    } else if (n === 3) {
-      footer.innerHTML = `<div class="step-nav"><button class="btn-back" onclick="goStep(2)">← رجوع</button><div style="flex:2;font-size:.8rem;color:var(--text-muted);display:flex;align-items:center;justify-content:center">اختر التصنيف أعلاه</div></div>`;
-    } else if (n === 4) {
-      const label = editingTxId ? '💾 حفظ التعديل' : '💾 حفظ';
-      footer.innerHTML = `<div class="step-nav"><button class="btn-back" onclick="goStep(3)">← رجوع</button><button class="btn-next" id="btn-save" onclick="saveTransaction()">${label}</button></div>`;
-    }
-  }
-  if (n===3 && !silent) renderMainCats();
-  if (n===4 && !silent) renderSubCats();
-  // scroll modal-body to top
-  const mb = document.querySelector('.modal-body');
-  if (mb) mb.scrollTop = 0;
+// ── type tabs ──
+function qSetType(type) {
+  txType = type;
+  // reset cat only if switching type
+  const last = getLastUsed();
+  txMainCat = last[type+'Cat'] || null;
+  txSubCat  = last[type+'Sub'] || null;
+  _applyTypeTab();
+  _applyCatRow();
+  _closeCatSheet();
 }
 
-function checkAmountStep() {
+function _applyTypeTab() {
+  const eb = document.getElementById('mtb-expense');
+  const ib = document.getElementById('mtb-income');
+  if (!eb || !ib) return;
+  eb.className = 'modal-type-btn' + (txType==='expense' ? ' active-expense' : '');
+  ib.className = 'modal-type-btn' + (txType==='income'  ? ' active-income'  : '');
+}
+
+// ── cat picker row display ──
+function _applyCatRow() {
+  const meta = txMainCat ? (CAT_META[txMainCat] || {}) : null;
+  document.getElementById('cp-icon').textContent = meta ? meta.emoji : '🏷️';
+  document.getElementById('cp-main').textContent = meta ? meta.label : 'اختر التصنيف';
+  document.getElementById('cp-sub').textContent  = txSubCat || (meta ? 'اضغط لتغيير التصنيف الفرعي' : 'اضغط لاختيار التصنيف');
+}
+
+// ── cat sheet toggle ──
+function toggleCatSheet() {
+  const sheet = document.getElementById('cat-sheet');
+  const row   = document.getElementById('cat-picker-row');
+  const isOpen = sheet.classList.contains('open');
+  if (isOpen) { _closeCatSheet(); return; }
+  sheet.classList.add('open');
+  row.classList.add('open');
+  _renderCatSheet();
+}
+
+function _closeCatSheet() {
+  document.getElementById('cat-sheet').classList.remove('open');
+  document.getElementById('cat-picker-row').classList.remove('open');
+}
+
+function _renderCatSheet() {
+  const cats = txType === 'expense' ? EXPENSE_CATS : INCOME_CATS;
+  // Group cats into sections of 4
+  const content = document.getElementById('cat-sheet-content');
+  content.innerHTML = `
+    <div class="cat-sheet-grid">
+      ${cats.map(c => `
+        <button class="csg-btn${txMainCat===c.id?' sel':''}" onclick="qPickCat('${c.id}')">
+          <span class="ce">${c.emoji}</span>${c.label}
+        </button>`).join('')}
+    </div>`;
+  // Show subcat if main already selected
+  if (txMainCat) _renderSubcatSheet();
+  else document.getElementById('subcat-sheet').style.display = 'none';
+}
+
+function qPickCat(id) {
+  txMainCat = id;
+  txSubCat  = null;
+  // Highlight
+  document.querySelectorAll('.csg-btn').forEach(b =>
+    b.classList.toggle('sel', b.onclick?.toString().includes(`'${id}'`))
+  );
+  _renderSubcatSheet();
+  _applyCatRow();
+}
+
+function _renderSubcatSheet() {
+  const cats = txType === 'expense' ? EXPENSE_CATS : INCOME_CATS;
+  const cat  = cats.find(c => c.id === txMainCat);
+  if (!cat) return;
+  const sheet = document.getElementById('subcat-sheet');
+  const grid  = document.getElementById('subcat-sheet-grid');
+  sheet.style.display = '';
+  grid.innerHTML = cat.subs.map(s => `
+    <button class="ssb${txSubCat===s.l?' sel':''}" onclick="qPickSub('${s.l.replace(/'/g,"\\'")}',this)">
+      <span class="se">${s.e}</span>${s.l}
+    </button>`).join('');
+}
+
+function qPickSub(label, btn) {
+  txSubCat = label;
+  document.querySelectorAll('.ssb').forEach(b => b.classList.remove('sel'));
+  if (btn) btn.classList.add('sel');
+  _applyCatRow();
+  // close sheet after picking subcat
+  setTimeout(_closeCatSheet, 200);
+}
+
+function onAmountInput() {
   const v = parseFloat(document.getElementById('tx-amount').value);
   txAmount = (v && v > 0) ? v : null;
-  const btn = document.getElementById('btn-step1-next');
-  if (btn) btn.disabled = !txAmount;
-}
-function selectType(type) {
-  txType = type; txMainCat = null; txSubCat = null;
-  document.getElementById('tc-expense').className = 'type-card'+(type==='expense'?' selected-expense':'');
-  document.getElementById('tc-income').className  = 'type-card'+(type==='income' ?' selected-income' :'');
-  // goStep(3) called directly from onclick in HTML
 }
 
-function renderMainCats() {
-  const cats = txType === 'expense' ? EXPENSE_CATS : INCOME_CATS;
-  const grid = document.getElementById('main-cat-grid');
-  // clicking a category auto-advances to step 4
-  grid.innerHTML = cats.map(c => `
-    <button class="main-cat-btn${txMainCat===c.id?' selected':''}" onclick="pickMainCat('${c.id}')">
-      <span class="cat-emoji">${c.emoji}</span>${c.label}
-    </button>`).join('');
-}
+// Legacy stubs (may be called from old HTML remnants)
+function resetModal() { _resetQuickForm(); }
+function goStep() {}
+function checkAmountStep() { onAmountInput(); }
+function selectType(t) { qSetType(t); }
+function renderMainCats() {}
+function pickMainCat(id) { qPickCat(id); }
+function renderSubCats() {}
+function pickSubCat(l, b) { qPickSub(l, b); }
 
-function pickMainCat(id) {
-  txMainCat = id; txSubCat = null;
-  // highlight selected
-  document.querySelectorAll('.main-cat-btn').forEach(b => {
-    b.classList.toggle('selected', b.textContent.trim().includes(
-      (txType==='expense'?EXPENSE_CATS:INCOME_CATS).find(c=>c.id===id)?.label||'__'
-    ));
-  });
-  // auto-advance to step 4
-  goStep(4);
-}
-
-function renderSubCats() {
-  const cats = txType==='expense' ? EXPENSE_CATS : INCOME_CATS;
-  const cat  = cats.find(c => c.id === txMainCat);
-  const cur  = userProfile?.currency || 'SAR';
-  const meta = CAT_META[txMainCat] || {};
-  const dateStr = document.getElementById('tx-date').value || new Date().toISOString().split('T')[0];
-  const dateLabel = new Intl.DateTimeFormat('ar-SA',{day:'numeric',month:'short',year:'numeric'}).format(new Date(dateStr+'T12:00:00'));
-
-  document.getElementById('tx-summary').innerHTML = `
-    <div class="tx-summary-row">
-      <span>المبلغ</span>
-      <span style="font-size:1.15rem;font-family:'Playfair Display',serif;color:${txType==='expense'?'var(--danger)':'var(--success)'}">
-        ${txType==='expense'?'−':'+'}${txAmount?.toLocaleString('ar-SA')} ${cur}
-      </span>
-    </div>
-    <div class="tx-summary-row"><span>النوع</span><span>${txType==='expense'?'📤 مصروف':'📥 دخل'}</span></div>
-    <div class="tx-summary-row"><span>التصنيف</span><span>${meta.emoji||''} ${meta.label||''}</span></div>
-    <div class="tx-summary-row"><span>التاريخ</span><span>${dateLabel}</span></div>`;
-
-  if (!cat) return;
-  const grid = document.getElementById('subcat-grid');
-  grid.innerHTML = cat.subs.map(s => `
-    <button class="subcat-btn${txSubCat===s.l?' selected':''}" onclick="pickSubCat('${s.l.replace(/'/g,"\\'")}',this)">
-      <span class="s-emoji">${s.e}</span>${s.l}
-    </button>`).join('');
-}
-
-function pickSubCat(label, btn) {
-  txSubCat = label;
-  document.querySelectorAll('.subcat-btn').forEach(b => b.classList.remove('selected'));
-  if (btn) btn.classList.add('selected');
-}
 
 async function saveTransaction() {
-  if (!txAmount || !txType || !txMainCat) { showToast('أكمل جميع الخطوات','error'); return; }
+  if (!txAmount || txAmount <= 0) { showToast('أدخل مبلغاً صحيحاً','error'); return; }
+  if (!txType)    { showToast('اختر نوع المعاملة','error'); return; }
+  if (!txMainCat) { showToast('اختر التصنيف','error'); return; }
   const btn = document.getElementById('btn-save');
-  btn.disabled = true; btn.textContent = editingTxId ? '⏳ جارٍ التعديل...' : '⏳ جارٍ الحفظ...';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
     const tx = {
       type:      txType,
@@ -1290,14 +1313,15 @@ async function saveTransaction() {
       showToast('تم تعديل المعاملة ✓','success');
     } else {
       await fbAddTx(currentUser.uid, tx);
+      // Remember last used for next time
+      saveLastUsed({ type: txType, [txType+'Cat']: txMainCat, [txType+'Sub']: txSubCat });
       showToast('تم حفظ المعاملة ✓','success');
     }
     closeModal();
   } catch(e) {
     console.error(e);
     showToast('فشلت العملية، تحقق من الاتصال','error');
-    btn.disabled = false;
-    btn.textContent = editingTxId ? '💾 حفظ التعديل' : '💾 حفظ';
+    if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; }
   }
 }
 
