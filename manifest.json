@@ -1,13 +1,16 @@
 {
-  "name": "صفوة — إدارة مالية فاخرة",
-  "short_name": "صفوة",
-  "description": "تطبيق لإدارة المصاريف والمداخيل بأسلوب فاخر",
+  "name": "وفرة — إدارة مالية ذكية",
+  "short_name": "وفرة",
+  "description": "تطبيق وفرة لإدارة المصاريف والمداخيل بذكاء وأناقة",
   "start_url": "./index.html",
   "id": "./index.html",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#f5f0e8",
+  "theme_color": "#1a3d2e",
   "orientation": "portrait",
   "lang": "ar",
   "dir": "rtl",
@@ -43,19 +46,32 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["finance", "productivity"],
+  "categories": [
+    "finance",
+    "productivity"
+  ],
   "shortcuts": [
     {
       "name": "إضافة مصروف",
       "short_name": "مصروف",
       "url": "./index.html",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "إضافة دخل",
       "short_name": "دخل",
       "url": "./index.html",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "screenshots": []

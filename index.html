@@ -6,13 +6,13 @@
 <meta name="theme-color" content="#0a0a0f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="صفوة">
+<meta name="apple-mobile-web-app-title" content="وفرة">
 <meta name="description" content="إدارة مالية ذكية وأنيقة">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
-<title>صفوة — إدارة مالية فاخرة</title>
+<title>وفرة — إدارة مالية ذكية</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -382,10 +382,10 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   /* Hide desktop sidebar — slide off screen */
   .sidebar{transform:translateX(105%);box-shadow:none}
   .sidebar.open{transform:translateX(0);box-shadow:-8px 0 40px rgba(0,0,0,.5)}
-  /* Sidebar footer above bottom-nav */
-  .sidebar-footer{padding-bottom:calc(68px + env(safe-area-inset-bottom,0px))}
-  /* Sidebar footer must clear bottom-nav (60px) + safe-area */
-  .sidebar-footer{padding-bottom:max(1rem,calc(60px + env(safe-area-inset-bottom,0px)))}
+  /* Sidebar: between header (52px) and bottom-nav (60px) */
+  .sidebar{top:52px !important;height:calc(100vh - 52px - 60px) !important;overflow-y:auto}
+  .sidebar-logo{display:none}
+  .sidebar-footer{padding-bottom:1rem}
   /* Content area */
   .main{margin-right:0;padding:0.75rem;padding-top:62px;padding-bottom:76px}
   /* Grids */
@@ -439,8 +439,8 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 
 <!-- LOADER -->
 <div id="global-loader">
-  <div class="logo">صفوة</div>
-  <div class="sub">SAFWA FINANCE</div>
+  <div class="logo">وفرة</div>
+  <div class="sub">WAFRA FINANCE</div>
   <div class="spinner"></div>
 </div>
 
@@ -448,8 +448,8 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 <div id="auth-screen" style="display:none">
   <div class="auth-card">
     <div class="auth-logo">
-      <div class="logo-mark">صفوة</div>
-      <div class="logo-sub">إدارة مالية فاخرة</div>
+      <div class="logo-mark">وفرة</div>
+      <div class="logo-sub">إدارة مالية ذكية</div>
     </div>
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchAuth('login')">تسجيل الدخول</button>
@@ -523,7 +523,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
     <button class="sidebar-toggle" style="position:static" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <span style="font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--gold);position:absolute;left:50%;transform:translateX(-50%)">صفوة</span>
+    <span style="font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--gold);position:absolute;left:50%;transform:translateX(-50%)">وفرة</span>
     <button class="theme-btn" id="theme-btn-mobile" onclick="toggleTheme()" title="تبديل المظهر">
       <svg id="theme-icon-moon-m" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       <svg id="theme-icon-sun-m"  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>
@@ -533,8 +533,8 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   <div class="layout">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-logo">
-        <div class="s-mark">صفوة</div>
-        <div class="s-sub">SAFWA FINANCE</div>
+        <div class="s-mark">وفرة</div>
+        <div class="s-sub">WAFRA FINANCE</div>
       </div>
       <div class="sidebar-user">
         <div class="user-avatar" id="sidebar-avatar">؟</div>
