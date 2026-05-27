@@ -134,7 +134,7 @@ select.form-input{cursor:pointer}
 .layout{display:flex;min-height:100vh}
 
 /* Sidebar */
-.sidebar{width:260px;background:var(--obsidian-2);border-left:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;right:0;height:100vh;z-index:100;transition:transform .3s ease}
+.sidebar{width:260px;background:var(--obsidian-2);border-left:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;right:0;height:100vh;z-index:170;transition:transform .3s ease}
 .sidebar-logo{padding:1.75rem 1.5rem 1.25rem;border-bottom:1px solid var(--border)}
 .sidebar-logo .s-mark{font-family:'Playfair Display',serif;font-size:2rem;color:var(--gold)}
 .sidebar-logo .s-sub{font-size:.7rem;color:var(--text-muted);letter-spacing:3px}
@@ -192,14 +192,15 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 /* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);z-index:300;display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;pointer-events:none;transition:opacity .25s}
 .modal-overlay.open{opacity:1;pointer-events:all}
-.modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:500px;max-height:90vh;display:flex;flex-direction:column;transform:translateY(20px);transition:transform .25s;position:relative;overflow:hidden}
+.modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:500px;max-height:88vh;display:flex;flex-direction:column;transform:translateY(20px);transition:transform .25s;position:relative;overflow:clip}
 .modal-overlay.open .modal{transform:translateY(0)}
-.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);z-index:1;pointer-events:none}
-.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.5rem 1.75rem 0;flex-shrink:0}
-.modal-title{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:600}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);z-index:1;pointer-events:none;border-radius:20px 20px 0 0}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem 0;flex-shrink:0}
+.modal-title{font-family:'Playfair Display',serif;font-size:1.35rem;font-weight:600}
 .modal-close{background:var(--obsidian-3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all .2s;flex-shrink:0}
 .modal-close:hover{border-color:var(--border-hover);color:var(--text-primary)}
-.modal-body{padding:1.5rem 1.75rem;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+.modal-body{padding:1.25rem 1.5rem 0.5rem;overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.modal-footer{padding:.75rem 1.5rem max(1rem,env(safe-area-inset-bottom));flex-shrink:0;background:var(--obsidian-2);border-top:1px solid var(--border)}
 
 /* Step indicator */
 .step-indicator{display:flex;align-items:center;gap:0;margin-bottom:1.75rem}
@@ -248,11 +249,11 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .subcat-btn:hover{border-color:var(--border-hover);color:var(--text-primary)}
 .subcat-btn.selected{border-color:var(--gold-dim);background:rgba(201,168,76,.12);color:var(--gold-light)}
 
-/* Step nav */
-.step-nav{display:flex;gap:.75rem;margin-top:1.25rem;padding-bottom:.5rem}
-.btn-back{flex:1;padding:.75rem;background:var(--obsidian-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-family:'Tajawal',sans-serif;font-size:.95rem;cursor:pointer;transition:all .2s}
+/* Step nav - OUTSIDE scroll, sticky at bottom */
+.step-nav{display:flex;gap:.6rem;padding:0.75rem 1.5rem 1.1rem;flex-shrink:0;background:var(--obsidian-2);border-top:1px solid var(--border)}
+.btn-back{flex:1;padding:.72rem;background:var(--obsidian-3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-secondary);font-family:'Tajawal',sans-serif;font-size:.9rem;cursor:pointer;transition:all .2s}
 .btn-back:hover{border-color:var(--border-hover);color:var(--text-primary)}
-.btn-next{flex:2;padding:.75rem;background:linear-gradient(135deg,var(--gold),var(--gold-dim));border:none;border-radius:var(--radius-sm);color:var(--obsidian);font-family:'Tajawal',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;transition:opacity .2s}
+.btn-next{flex:2;padding:.72rem;background:linear-gradient(135deg,var(--gold),var(--gold-dim));border:none;border-radius:var(--radius-sm);color:var(--obsidian);font-family:'Tajawal',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s}
 .btn-next:hover{opacity:.9}
 .btn-next:disabled{opacity:.4;cursor:not-allowed}
 
@@ -282,7 +283,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .tx-summary-row span:last-child{font-weight:600}
 
 /* Charts */
-.chart-container{position:relative;height:180px;display:flex;align-items:flex-end;gap:6px;padding-bottom:1.75rem}
+.chart-container{position:relative;height:185px;display:flex;align-items:flex-end;gap:5px;padding-bottom:1.6rem;overflow:hidden}
 .chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px}
 .chart-bar{width:100%;border-radius:4px 4px 0 0;min-height:2px;cursor:pointer;position:relative;transition:height .6s cubic-bezier(.4,0,.2,1)}
 .chart-bar:hover::after{content:attr(data-value);position:absolute;top:-26px;left:50%;transform:translateX(-50%);background:var(--obsidian-4);color:var(--gold-light);padding:3px 8px;border-radius:4px;font-size:.7rem;white-space:nowrap;border:1px solid var(--border)}
@@ -343,7 +344,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 .bnav-add svg{width:26px;height:26px;color:var(--obsidian)}
 
 /* ── SIDEBAR OVERLAY ── */
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;backdrop-filter:blur(3px)}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:165;backdrop-filter:blur(2px)}
 .sidebar-overlay.show{display:block}
 
 /* ── MOBILE HEADER ── */
@@ -386,9 +387,12 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
   .bottom-nav{display:block}
   .fab{display:none}
   .page-header .btn-gold{display:none}
-  /* Modal from bottom */
+  /* Modal sheet from bottom on mobile */
   .modal-overlay{align-items:flex-end;padding:0}
-  .modal{border-radius:20px 20px 0 0;max-height:92vh}
+  .modal{border-radius:20px 20px 0 0;max-height:88vh;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .modal::before{border-radius:20px 20px 0 0}
+  /* Push step-nav above bottom safe area */
+  .step-nav{padding-bottom:max(1rem, env(safe-area-inset-bottom))}
   /* Cats */
   .main-cat-grid{grid-template-columns:repeat(3,1fr)}
   .subcat-grid{grid-template-columns:repeat(3,1fr)}
@@ -506,7 +510,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
 
 <!-- APP -->
 <div id="app">
-  <div style="position:fixed;top:0;left:0;right:0;height:52px;background:var(--obsidian-2);border-bottom:1px solid var(--border);z-index:98;display:flex;align-items:center;justify-content:space-between;padding:0 1rem" id="mobile-header">
+  <div style="position:fixed;top:0;left:0;right:0;height:52px;background:var(--obsidian-2);border-bottom:1px solid var(--border);z-index:160;display:flex;align-items:center;justify-content:space-between;padding:0 1rem" id="mobile-header">
     <button class="sidebar-toggle" style="position:static" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
@@ -760,7 +764,8 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
       </div>
 
       <!-- STEP 1: Amount -->
-      <div class="step-panel active" id="step-1">
+      <!-- scrollable content -->
+      <div id="step-1" class="step-panel active">
         <div class="form-label" style="margin-bottom:.5rem;font-size:.85rem;color:var(--text-muted)">أدخل المبلغ ثم اضغط التالي أو Enter</div>
         <div class="amount-big-wrap">
           <input class="amount-big" type="number" id="tx-amount" placeholder="0.00" min="0" step="0.01"
@@ -772,40 +777,23 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
           <label class="form-label">التاريخ</label>
           <input class="form-input" type="date" id="tx-date">
         </div>
-        <div class="step-nav">
-          <button class="btn-next" id="btn-step1-next" onclick="goStep(2)" disabled>التالي ←</button>
-        </div>
       </div>
-
-      <!-- STEP 2: Type — auto-advance on click -->
-      <div class="step-panel" id="step-2">
+      <div id="step-2" class="step-panel">
         <div class="form-label" style="margin-bottom:.75rem;font-size:.85rem;color:var(--text-muted)">اختر نوع المعاملة</div>
         <div class="type-toggle">
           <div class="type-card" id="tc-expense" onclick="selectType('expense');goStep(3)">
-            <span class="type-card-icon">📤</span>
-            <span class="type-card-label">مصروف</span>
+            <span class="type-card-icon">📤</span><span class="type-card-label">مصروف</span>
           </div>
           <div class="type-card" id="tc-income" onclick="selectType('income');goStep(3)">
-            <span class="type-card-icon">📥</span>
-            <span class="type-card-label">دخل</span>
+            <span class="type-card-icon">📥</span><span class="type-card-label">دخل</span>
           </div>
         </div>
-        <div class="step-nav" style="margin-top:.75rem">
-          <button class="btn-back" onclick="goStep(1)">← رجوع</button>
-        </div>
       </div>
-
-      <!-- STEP 3: Main category — auto-advance on click -->
-      <div class="step-panel" id="step-3">
+      <div id="step-3" class="step-panel">
         <div class="form-label" style="margin-bottom:.75rem;font-size:.85rem;color:var(--text-muted)">اختر التصنيف</div>
         <div class="main-cat-grid" id="main-cat-grid"></div>
-        <div class="step-nav" style="margin-top:.75rem">
-          <button class="btn-back" onclick="goStep(2)">← رجوع</button>
-        </div>
       </div>
-
-      <!-- STEP 4: Subcategory + note + save -->
-      <div class="step-panel" id="step-4">
+      <div id="step-4" class="step-panel">
         <div class="tx-summary" id="tx-summary"></div>
         <div class="subcat-label">اختر التصنيف الفرعي (اختياري)</div>
         <div class="subcat-grid" id="subcat-grid"></div>
@@ -814,10 +802,11 @@ nav{flex:1;padding:1rem 0;overflow-y:auto}
           <input class="form-input" type="text" id="tx-note" placeholder="مثال: غداء عمل، إيجار أبريل..."
             onkeydown="if(event.key==='Enter')saveTransaction()">
         </div>
-        <div class="step-nav">
-          <button class="btn-back" onclick="goStep(3)">← رجوع</button>
-          <button class="btn-next" id="btn-save" onclick="saveTransaction()">💾 حفظ</button>
-        </div>
+      </div><!-- end modal-body -->
+
+      <!-- STICKY FOOTER NAV — always visible -->
+      <div class="modal-footer" id="modal-footer">
+        <!-- filled dynamically by goStep() -->
       </div>
 
     </div>
@@ -1165,19 +1154,38 @@ function resetModal() {
 
 function goStep(n, silent) {
   step = n;
+  // Update step dots
   for (let i=1;i<=4;i++) {
     document.getElementById('step-'+i).classList.toggle('active', i===n);
     const dot = document.getElementById('sdot-'+i);
-    if (i < n)       { dot.className='step-dot done';   dot.textContent='✓'; }
-    else if (i === n){ dot.className='step-dot active'; dot.textContent=['١','٢','٣','٤'][i-1]; }
-    else             { dot.className='step-dot';         dot.textContent=['١','٢','٣','٤'][i-1]; }
+    if (i < n)        { dot.className='step-dot done';   dot.textContent='✓'; }
+    else if (i === n) { dot.className='step-dot active'; dot.textContent=['١','٢','٣','٤'][i-1]; }
+    else              { dot.className='step-dot';         dot.textContent=['١','٢','٣','٤'][i-1]; }
     if (i<4) document.getElementById('sline-'+i).className='step-line'+(i<n?' done':'');
+  }
+  // Render footer buttons for this step
+  const footer = document.getElementById('modal-footer');
+  if (footer) {
+    if (n === 1) {
+      footer.innerHTML = `<div class="step-nav"><button class="btn-next" id="btn-step1-next" onclick="goStep(2)" disabled>التالي ←</button></div>`;
+      // re-check amount to enable/disable
+      const v = parseFloat(document.getElementById('tx-amount')?.value||'0');
+      const btn = document.getElementById('btn-step1-next');
+      if (btn) btn.disabled = !(v > 0);
+    } else if (n === 2) {
+      footer.innerHTML = `<div class="step-nav"><button class="btn-back" onclick="goStep(1)">← رجوع</button><div style="flex:2;font-size:.8rem;color:var(--text-muted);display:flex;align-items:center;justify-content:center">اختر النوع أعلاه</div></div>`;
+    } else if (n === 3) {
+      footer.innerHTML = `<div class="step-nav"><button class="btn-back" onclick="goStep(2)">← رجوع</button><div style="flex:2;font-size:.8rem;color:var(--text-muted);display:flex;align-items:center;justify-content:center">اختر التصنيف أعلاه</div></div>`;
+    } else if (n === 4) {
+      const label = editingTxId ? '💾 حفظ التعديل' : '💾 حفظ';
+      footer.innerHTML = `<div class="step-nav"><button class="btn-back" onclick="goStep(3)">← رجوع</button><button class="btn-next" id="btn-save" onclick="saveTransaction()">${label}</button></div>`;
+    }
   }
   if (n===3 && !silent) renderMainCats();
   if (n===4 && !silent) renderSubCats();
-  // scroll modal to top on step change
-  const modal = document.querySelector('.modal');
-  if (modal) modal.scrollTop = 0;
+  // scroll modal-body to top
+  const mb = document.querySelector('.modal-body');
+  if (mb) mb.scrollTop = 0;
 }
 
 function checkAmountStep() {
@@ -1186,7 +1194,6 @@ function checkAmountStep() {
   const btn = document.getElementById('btn-step1-next');
   if (btn) btn.disabled = !txAmount;
 }
-
 function selectType(type) {
   txType = type; txMainCat = null; txSubCat = null;
   document.getElementById('tc-expense').className = 'type-card'+(type==='expense'?' selected-expense':'');
@@ -1376,21 +1383,35 @@ function renderBarChart() {
   for (let i=5;i>=0;i--) {
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
     const txs = getMonthTxs(d.getFullYear(), d.getMonth());
-    months.push({ label: d.toLocaleDateString('ar-SA',{month:'short'}), exp: txs.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0), inc: txs.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0) });
+    months.push({
+      label: d.toLocaleDateString('ar-SA',{month:'short'}),
+      exp: txs.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0),
+      inc: txs.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0)
+    });
   }
   const maxVal = Math.max(...months.flatMap(m=>[m.exp,m.inc]),1);
-  const maxH = 140;
+  const maxH = 130;
   bc.innerHTML = months.map(m => {
-    const eH = Math.max(Math.round(m.exp/maxVal*maxH),2);
-    const iH = Math.max(Math.round(m.inc/maxVal*maxH),2);
+    const eH = Math.max(Math.round(m.exp/maxVal*maxH),3);
+    const iH = Math.max(Math.round(m.inc/maxVal*maxH),3);
     return `<div class="chart-bar-wrap">
-      <div style="display:flex;gap:3px;align-items:flex-end;height:${maxH}px">
-        <div class="chart-bar" style="background:var(--danger);height:${eH}px;width:50%" data-value="${fmt(m.exp)}"></div>
-        <div class="chart-bar" style="background:var(--success);height:${iH}px;width:50%" data-value="${fmt(m.inc)}"></div>
+      <div style="display:flex;gap:2px;align-items:flex-end;height:${maxH}px">
+        <div class="chart-bar" style="background:var(--danger);opacity:.85;height:${eH}px;width:50%" data-value="${fmt(m.exp)}"></div>
+        <div class="chart-bar" style="background:var(--success);opacity:.85;height:${iH}px;width:50%" data-value="${fmt(m.inc)}"></div>
       </div>
       <div class="chart-label">${m.label}</div>
     </div>`;
   }).join('');
+  // Add legend
+  bc.insertAdjacentHTML('afterend', `
+    <div style="display:flex;gap:1rem;margin-top:.5rem;justify-content:center">
+      <span style="font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem">
+        <span style="width:10px;height:10px;background:var(--danger);border-radius:2px;display:inline-block;opacity:.85"></span>مصاريف
+      </span>
+      <span style="font-size:.72rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem">
+        <span style="width:10px;height:10px;background:var(--success);border-radius:2px;display:inline-block;opacity:.85"></span>مداخيل
+      </span>
+    </div>`);
 }
 
 function renderDonut(txs) {
