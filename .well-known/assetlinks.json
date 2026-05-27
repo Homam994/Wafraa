@@ -2,7 +2,7 @@
       "relation": ["delegate_permission/common.handle_all_urls"],
       "target": {
         "namespace": "android_app",
-        "package_name": "io.github.homam994.twa",
-        "sha256_cert_fingerprints": ["5E:3A:AE:8D:22:EE:20:39:B4:CF:FB:88:24:58:75:6D:58:2E:5D:07:54:6A:76:62:B1:EE:89:D1:76:BD:5F:61"]
+        "package_name": "app.vercel.wafraa.twa",
+        "sha256_cert_fingerprints": ["0F:27:61:0F:71:F1:E8:D3:E9:61:FB:F6:B4:CE:C0:A8:4B:F6:E3:D9:8C:FF:87:72:57:15:ED:B6:D4:F6:89:97"]
       }
     }]
