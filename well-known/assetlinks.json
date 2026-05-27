@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.homam994.twa",
+        "sha256_cert_fingerprints": ["5E:3A:AE:8D:22:EE:20:39:B4:CF:FB:88:24:58:75:6D:58:2E:5D:07:54:6A:76:62:B1:EE:89:D1:76:BD:5F:61"]
+      }
+    }]
