@@ -204,15 +204,15 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 .tx-delete:hover{color:var(--danger)}
 
 /* ── MODAL ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);z-index:600;display:flex;align-items:flex-end;justify-content:center;padding:0;opacity:0;pointer-events:none;transition:opacity .25s}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:env(safe-area-inset-top,0px) 0 0;opacity:0;pointer-events:none;transition:opacity .25s}
 .modal-overlay.open{opacity:1;pointer-events:all}
 /* Modal always slides from bottom — sits above keyboard naturally */
-.modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:20px 20px 0 0;width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,0,.67,0);position:relative;overflow:clip}
+.modal{background:var(--obsidian-2);border:1px solid var(--border);border-radius:0 0 20px 20px;width:100%;max-width:560px;max-height:92dvh;display:flex;flex-direction:column;transform:translateY(-100%);transition:transform .3s cubic-bezier(.32,0,.67,0);position:relative;overflow:clip}
 .modal-overlay.open .modal{transform:translateY(0)}
-.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);z-index:1;pointer-events:none}
-/* drag handle */
-.modal::after{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:40px;height:4px;background:var(--border);border-radius:2px}
-.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1.5rem 1.5rem .75rem;flex-shrink:0;margin-top:6px}
+.modal::before{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold-light),transparent);z-index:1;pointer-events:none}
+/* drag handle bottom */
+.modal::after{content:'';position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:40px;height:4px;background:var(--border);border-radius:2px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem .75rem;flex-shrink:0}
 .modal-title{font-family:'Playfair Display',serif;font-size:1.35rem;font-weight:600}
 .modal-close{background:var(--obsidian-3);border:1px solid var(--border);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-secondary);transition:all .2s;flex-shrink:0}
 .modal-close:hover{border-color:var(--border-hover);color:var(--text-primary)}
@@ -440,12 +440,9 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   .bottom-nav{display:block}
   .fab{display:none}
   .page-header .btn-gold{display:none}
-  /* Modal sheet from bottom on mobile */
-  .modal-overlay{align-items:flex-end;padding:0}
-  .modal{border-radius:20px 20px 0 0;max-height:88vh;padding-bottom:env(safe-area-inset-bottom,0px)}
-  .modal::before{border-radius:20px 20px 0 0}
-  /* Push step-nav above bottom safe area */
-  .step-nav{padding-bottom:max(1rem, env(safe-area-inset-bottom))}
+  /* Modal slides from top on mobile */
+  .modal-overlay{align-items:flex-start;padding-top:env(safe-area-inset-top,0px)}
+  .modal{border-radius:0 0 20px 20px;max-height:88dvh}
   /* Cats */
   .main-cat-grid{grid-template-columns:repeat(3,1fr)}
   .subcat-grid{grid-template-columns:repeat(3,1fr)}
@@ -1416,35 +1413,43 @@ function exportData(format = 'csv') {
 }
 
 function _exportCSV(headers, rows) {
-  const SEP = ';';
+  const SEP = ',';   // standard comma — works universally
 
   const esc = v => {
     const s = String(v === null || v === undefined ? '' : v);
-    if (s.includes(SEP) || s.includes('\n') || s.includes('"')) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
+    // Always quote every cell for maximum compatibility
+    return '"' + s.replace(/"/g, '""') + '"';
   };
 
   const lines = [
-    'sep=' + SEP,
     headers.map(esc).join(SEP),
     ...rows.map(r => r.map(esc).join(SEP))
   ];
-
   const content = lines.join('\r\n');
 
-  // TextEncoder → UTF-8 bytes → prepend BOM bytes manually
-  const encoder = new TextEncoder();
-  const encoded = encoder.encode(content);
-  const bom     = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
-  const final   = new Uint8Array(bom.length + encoded.length);
-  final.set(bom, 0);
-  final.set(encoded, bom.length);
-
-  const blob = new Blob([final], { type: 'text/csv' });
+  // Build Blob with explicit UTF-8 BOM as raw bytes
+  // This is the ONLY reliable way — string concatenation corrupts non-ASCII in Blob
+  const bom   = [0xEF, 0xBB, 0xBF];
+  const bytes = [];
+  // Manually encode to UTF-8
+  for (let i = 0; i < content.length; ) {
+    const cp = content.codePointAt(i);
+    if (cp < 0x80) {
+      bytes.push(cp);
+    } else if (cp < 0x800) {
+      bytes.push(0xC0|(cp>>6), 0x80|(cp&0x3F));
+    } else if (cp < 0x10000) {
+      bytes.push(0xE0|(cp>>12), 0x80|((cp>>6)&0x3F), 0x80|(cp&0x3F));
+    } else {
+      bytes.push(0xF0|(cp>>18), 0x80|((cp>>12)&0x3F), 0x80|((cp>>6)&0x3F), 0x80|(cp&0x3F));
+      i++; // surrogate pair
+    }
+    i++;
+  }
+  const all = new Uint8Array([...bom, ...bytes]);
+  const blob = new Blob([all.buffer], { type: 'text/csv;charset=UTF-8' });
   _download(blob, `وفرة-${_today()}.csv`);
-  showToast(`تم تصدير ${rows.length} معاملة كـ CSV ✓`, 'success');
+  showToast(`تم تصدير ${rows.length} معاملة ✓`, 'success');
 }
 
 function _exportExcel(headers, rows) {
@@ -1592,6 +1597,9 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   _closeCatSheet();
   editingTxId = null;
+  // Always re-enable save button for next open
+  const btn = document.getElementById('btn-save');
+  if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; }
 }
 
 function handleOverlayClick(e) { if (e.target === e.currentTarget) closeModal(); }
@@ -1720,42 +1728,55 @@ async function saveTransaction() {
   if (!txMainCat) { showToast('اختر التصنيف','error'); return; }
   const btn = document.getElementById('btn-save');
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+
+  const tx = {
+    type:      txType,
+    cat:       txMainCat,
+    sub:       txSubCat || '',
+    amount:    txAmount,
+    note:      document.getElementById('tx-note').value.trim(),
+    date:      document.getElementById('tx-date').value || new Date().toISOString().split('T')[0],
+    createdAt: editingTxId
+      ? (transactions.find(t=>t.id===editingTxId)?.createdAt || new Date().toISOString())
+      : new Date().toISOString(),
+    updatedAt: editingTxId ? new Date().toISOString() : null
+  };
+
+  // Wrap Firestore call with a 3s timeout
+  // Offline: Firestore queues locally but may hang — we treat timeout as local success
+  const TIMEOUT = 3000;
+  const withTimeout = (promise) => Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), TIMEOUT))
+  ]);
+
   try {
-    const tx = {
-      type:      txType,
-      cat:       txMainCat,
-      sub:       txSubCat || '',
-      amount:    txAmount,
-      note:      document.getElementById('tx-note').value.trim(),
-      date:      document.getElementById('tx-date').value || new Date().toISOString().split('T')[0],
-      createdAt: editingTxId
-        ? (transactions.find(t=>t.id===editingTxId)?.createdAt || new Date().toISOString())
-        : new Date().toISOString(),
-      updatedAt: editingTxId ? new Date().toISOString() : null
-    };
     if (editingTxId) {
-      await fbUpdateTx(currentUser.uid, editingTxId, tx);
-      showToast('تم تعديل المعاملة ✓','success');
+      await withTimeout(fbUpdateTx(currentUser.uid, editingTxId, tx));
+      _afterSave(true);
     } else {
-      await fbAddTx(currentUser.uid, tx);
-      saveLastUsed({ type: txType, [txType+'Cat']: txMainCat, [txType+'Sub']: txSubCat });
-      showToast(navigator.onLine ? 'تم الحفظ ✓' : 'تم الحفظ محلياً 📱 (سيُزامَن عند الاتصال)','success');
-    }
-    closeModal();
-    if (!_appUnlocked) {
-      document.getElementById('lock-screen').style.zIndex = '800';
+      await withTimeout(fbAddTx(currentUser.uid, tx));
+      _afterSave(false, '✓ تم الحفظ');
     }
   } catch(e) {
-    // Firestore offline: the write is queued locally — treat as success
-    if (e.code === 'unavailable' || !navigator.onLine) {
-      saveLastUsed({ type: txType, [txType+'Cat']: txMainCat, [txType+'Sub']: txSubCat });
-      closeModal();
-      showToast('تم الحفظ محلياً 📱 (سيُزامَن عند الاتصال)','success');
+    // TIMEOUT or offline — Firestore has already queued the write locally
+    if (e.message === 'TIMEOUT' || e.code === 'unavailable' || !navigator.onLine) {
+      _afterSave(false, '📱 حُفظ محلياً — سيُزامَن عند الاتصال');
     } else {
-      console.error(e);
-      showToast('فشل الحفظ: ' + (e.message||e.code||''),'error');
+      console.error('saveTransaction:', e);
+      showToast('فشل الحفظ: ' + (e.message || e.code || 'خطأ'), 'error');
       if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; }
     }
+  }
+}
+
+function _afterSave(isEdit, toastMsg) {
+  if (!isEdit) saveLastUsed({ type: txType, [txType+'Cat']: txMainCat, [txType+'Sub']: txSubCat });
+  showToast(toastMsg || (isEdit ? '✓ تم التعديل' : '✓ تم الحفظ'), 'success');
+  closeModal();
+  if (!_appUnlocked) {
+    const ls = document.getElementById('lock-screen');
+    if (ls) ls.style.zIndex = '800';
   }
 }
 
@@ -2378,6 +2399,12 @@ function initNetworkMonitor() {
   function onOffline() {
     _wasOffline = true;
     showNetBadge('offline', '📡 بدون إنترنت — البيانات محفوظة محلياً');
+    // Hide offline badge after 5s
+    clearTimeout(_netTimer);
+    _netTimer = setTimeout(() => {
+      const b = document.getElementById('net-badge');
+      if (b) b.className = '';
+    }, 5000);
   }
 
   window.addEventListener('online',  onOnline);
