@@ -1399,10 +1399,10 @@ function txToRow(tx) {
     tx.type === 'income' ? 'دخل' : 'مصروف',
     CAT_LABELS[tx.cat] || tx.cat,
     tx.sub || '',
-    tx.amount,
+    Number(tx.amount),          // رقم حقيقي للعمليات الحسابية في Excel
     userProfile?.currency || 'SAR',
     tx.note || '',
-    tx.createdAt?.split('T')[0] || ''
+    tx.createdAt ? tx.createdAt.replace('T',' ').split('.')[0] : tx.date
   ];
 }
 
@@ -1420,13 +1420,26 @@ function exportData(format = 'csv') {
 }
 
 function _exportCSV(headers, rows) {
-  // Add BOM for Excel Arabic support
+  // استخدام فاصلة منقوطة `;` لأن Excel العربي يتعرف عليها كفاصل عمود
+  // + إضافة sep=; في أول سطر لإعلام Excel بالفاصل المستخدم
   const BOM = '\uFEFF';
-  const esc = v => `"${String(v).replace(/"/g,'""')}"`;
+  const SEP = ';';
+
+  const esc = v => {
+    const s = String(v === null || v === undefined ? '' : v);
+    // نغلّف بـ "" إذا احتوى على الفاصل أو سطر جديد أو علامة اقتباس
+    if (s.includes(SEP) || s.includes('\n') || s.includes('"')) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  };
+
   const lines = [
-    headers.map(esc).join(','),
-    ...rows.map(r => r.map(esc).join(','))
+    'sep=' + SEP,                          // Excel hint
+    headers.map(esc).join(SEP),
+    ...rows.map(r => r.map(esc).join(SEP))
   ];
+
   const csv  = BOM + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   _download(blob, `وفرة-${_today()}.csv`);
@@ -1434,55 +1447,17 @@ function _exportCSV(headers, rows) {
 }
 
 function _exportExcel(headers, rows) {
-  // Build a minimal XLSX using XML (no external lib needed)
-  const esc = s => String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-
-  const allRows = [headers, ...rows];
-  const sheetRows = allRows.map((row, ri) =>
-    `<row r="${ri+1}">${row.map((cell, ci) => {
-      const col = String.fromCharCode(65 + ci);
-      const ref = `${col}${ri+1}`;
-      const isNum = typeof cell === 'number' || (ri > 0 && ci === 4 && !isNaN(cell));
-      return isNum
-        ? `<c r="${ref}" t="n"><v>${cell}</v></c>`
-        : `<c r="${ref}" t="inlineStr"><is><t>${esc(cell)}</t></is></c>`;
-    }).join('')}</row>`
-  ).join('');
-
-  // Minimal XLSX structure
-  const xl = {
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-</Types>`,
-    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`,
-    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="وفرة" sheetId="1" r:id="rId1"/></sheets>
-</workbook>`,
-    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-</Relationships>`,
-    'xl/worksheets/sheet1.xml': `<?xml version="1.0" encoding="UTF-8"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetView rightToLeft="1"/>
-  <sheetData>${sheetRows}</sheetData>
-</worksheet>`
-  };
-
-  // Produce ZIP-like XLSX via base64 (works for simple files)
-  // Use a simpler approach: generate TSV and rename to .xls (Excel opens it)
+  // TSV بـ BOM → Excel يفتحه مباشرة بأعمدة منفصلة
   const BOM = '\uFEFF';
-  const tsv  = BOM + [headers, ...rows].map(r => r.join('\t')).join('\r\n');
+  const esc = v => {
+    const s = String(v === null || v === undefined ? '' : v);
+    return s.replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
+  };
+  const lines = [
+    headers.map(esc).join('\t'),
+    ...rows.map(r => r.map(esc).join('\t'))
+  ];
+  const tsv  = BOM + lines.join('\r\n');
   const blob = new Blob([tsv], { type: 'application/vnd.ms-excel;charset=utf-8' });
   _download(blob, `وفرة-${_today()}.xls`);
   showToast(`تم تصدير ${rows.length} معاملة كـ Excel ✓`, 'success');
@@ -1848,7 +1823,13 @@ function renderDashboard() {
   document.getElementById('stat-save').textContent     = income > 0 ? savePct + '%' : '—';
 
   const rl = document.getElementById('recent-list');
-  const recent = transactions.slice(0, 8);
+  // ترتيب حسب createdAt (الأحدث أولاً) ثم date كـ fallback
+  const sorted = [...transactions].sort((a, b) => {
+    const ta = a.createdAt || (a.date + 'T00:00:00');
+    const tb = b.createdAt || (b.date + 'T00:00:00');
+    return tb.localeCompare(ta);
+  });
+  const recent = sorted.slice(0, 8);
   rl.innerHTML = recent.length ? recent.map(renderTxItem).join('') :
     '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-text">لا توجد معاملات بعد. أضف أول معاملة!</div></div>';
 
@@ -2198,9 +2179,9 @@ function showLockScreen(pendingModal) {
   document.getElementById('app').style.visibility = 'hidden';
   document.getElementById('lock-screen').classList.add('show');
   const msg = document.getElementById('lock-msg');
-  msg.textContent = 'التحقق مطلوب للوصول إلى بياناتك';
+  msg.textContent = 'اضغط على القفل لفتح التطبيق، أو أضف معاملة مباشرة';
   msg.className   = 'lock-msg';
-  setTimeout(triggerBiometric, 500);
+  // لا يبدأ التحقق تلقائياً — المستخدم يختار
 }
 
 function hideLockScreen() {
