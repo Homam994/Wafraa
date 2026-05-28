@@ -15,6 +15,7 @@ const APP_SHELL = [
   './icon-512.png',
   './apple-touch-icon.png',
   './favicon-32.png',
+  './logo.png',
 ];
 
 // ── INSTALL ─────────────────────────────────────────
