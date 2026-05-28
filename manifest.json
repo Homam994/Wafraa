@@ -52,24 +52,54 @@
   ],
   "shortcuts": [
     {
-      "name": "إضافة مصروف",
-      "short_name": "مصروف",
-      "url": "./index.html",
+      "name": "⚡ معاملة سريعة",
+      "short_name": "معاملة",
+      "description": "أضف مصروفاً أو دخلاً بسرعة",
+      "url": "./index.html?action=quick-add",
       "icons": [
         {
           "src": "icon-192.png",
-          "sizes": "192x192"
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     },
     {
-      "name": "إضافة دخل",
-      "short_name": "دخل",
-      "url": "./index.html",
+      "name": "📤 إضافة مصروف",
+      "short_name": "مصروف",
+      "description": "سجّل مصروفاً جديداً",
+      "url": "./index.html?action=add&type=expense",
       "icons": [
         {
           "src": "icon-192.png",
-          "sizes": "192x192"
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "📥 إضافة دخل",
+      "short_name": "دخل",
+      "description": "سجّل دخلاً جديداً",
+      "url": "./index.html?action=add&type=income",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "📊 التقارير",
+      "short_name": "تقارير",
+      "description": "عرض التقارير الشهرية",
+      "url": "./index.html?action=reports",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
         }
       ]
     }

@@ -262,6 +262,21 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 .btn-next:hover{opacity:.9}
 .btn-next:disabled{opacity:.4;cursor:not-allowed}
 
+/* ── SETTINGS PAGE ── */
+.settings-section-title{font-size:.8rem;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem}
+.setting-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border-bottom:none;padding-bottom:0}
+.setting-row:first-of-type{padding-top:0}
+.setting-info{flex:1;min-width:0}
+.setting-label{font-size:.9rem;font-weight:500;margin-bottom:.2rem}
+.setting-desc{font-size:.75rem;color:var(--text-muted);line-height:1.4}
+/* Toggle switch */
+.toggle-wrap{cursor:pointer;flex-shrink:0}
+.toggle{width:44px;height:24px;background:var(--obsidian-4);border-radius:12px;position:relative;transition:background .25s}
+.toggle::after{content:'';position:absolute;top:3px;right:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .25s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.toggle.on{background:var(--gold)}
+.toggle.on::after{transform:translateX(-20px)}
+
 /* ── NETWORK STATUS BADGE ── */
 #net-badge{position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-100%);z-index:900;padding:.4rem 1.2rem;border-radius:0 0 10px 10px;font-size:.78rem;font-weight:600;font-family:'Tajawal',sans-serif;transition:transform .4s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap}
 #net-badge.offline{background:#e05c5c;color:#fff;transform:translateX(-50%) translateY(0)}
@@ -633,6 +648,11 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 2v10l7 4"/></svg>
           تحليل التصنيفات
         </div>
+        <div class="nav-section">الحساب</div>
+        <div class="nav-item" onclick="goPage('settings')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          الإعدادات
+        </div>
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-footer-row">
@@ -766,6 +786,102 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
       <div class="page" id="page-categories">
         <div class="page-header"><div><div class="page-title">تحليل التصنيفات</div></div></div>
         <div class="card"><div class="section-title" style="margin-bottom:1.5rem">إجمالي المصاريف حسب التصنيف</div><div id="cat-analysis-list"></div></div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="page" id="page-settings">
+        <div class="page-header"><div><div class="page-title">الإعدادات</div><div class="page-sub">تخصيص تجربة وفرة</div></div></div>
+
+        <!-- Security -->
+        <div class="card" style="margin-bottom:1.25rem">
+          <div class="settings-section-title">🔒 الأمان والخصوصية</div>
+          <div class="setting-row" id="sr-biometric">
+            <div class="setting-info">
+              <div class="setting-label">التحقق الحيوي عند الفتح</div>
+              <div class="setting-desc">بصمة / وجه / PIN الجهاز عند كل فتح للتطبيق</div>
+            </div>
+            <div class="toggle-wrap" onclick="toggleSetting('biometric')">
+              <div class="toggle" id="tog-biometric"></div>
+            </div>
+          </div>
+          <div class="setting-row" id="sr-lock-bg">
+            <div class="setting-info">
+              <div class="setting-label">القفل عند الخروج للخلفية</div>
+              <div class="setting-desc">يقفل التطبيق تلقائياً عند تصغيره أو تبديل التطبيقات</div>
+            </div>
+            <div class="toggle-wrap" onclick="toggleSetting('lockBg')">
+              <div class="toggle" id="tog-lockBg"></div>
+            </div>
+          </div>
+          <div class="setting-row" id="sr-reset-bio" style="cursor:pointer" onclick="resetBiometricCred()">
+            <div class="setting-info">
+              <div class="setting-label">إعادة تسجيل البصمة</div>
+              <div class="setting-desc">احذف بيانات التحقق الحيوي وسجّلها من جديد</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18" style="color:var(--text-muted)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3"/></svg>
+          </div>
+        </div>
+
+        <!-- Display -->
+        <div class="card" style="margin-bottom:1.25rem">
+          <div class="settings-section-title">🎨 العرض والمظهر</div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label">الوضع الليلي</div>
+              <div class="setting-desc">خلفية داكنة تريح العين في الإضاءة المنخفضة</div>
+            </div>
+            <div class="toggle-wrap" onclick="toggleTheme()">
+              <div class="toggle" id="tog-theme"></div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label">العملة</div>
+              <div class="setting-desc" id="setting-currency-label">—</div>
+            </div>
+            <select class="form-input" id="setting-currency" style="width:auto;padding:.4rem .75rem;font-size:.85rem" onchange="saveCurrencySetting()">
+              <option value="SAR">🇸🇦 SAR</option>
+              <option value="AED">🇦🇪 AED</option>
+              <option value="KWD">🇰🇼 KWD</option>
+              <option value="BHD">🇧🇭 BHD</option>
+              <option value="QAR">🇶🇦 QAR</option>
+              <option value="EGP">🇪🇬 EGP</option>
+              <option value="USD">🇺🇸 USD</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Data -->
+        <div class="card" style="margin-bottom:1.25rem">
+          <div class="settings-section-title">💾 البيانات</div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label">مزامنة البيانات</div>
+              <div class="setting-desc" id="sync-status-label">Firebase Firestore — مزامنة فورية</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" width="20" height="20"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="setting-row" style="cursor:pointer" onclick="exportData()">
+            <div class="setting-info">
+              <div class="setting-label">تصدير البيانات (JSON)</div>
+              <div class="setting-desc">حمّل نسخة من جميع معاملاتك</div>
+            </div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18" style="color:var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+        </div>
+
+        <!-- About -->
+        <div class="card">
+          <div class="settings-section-title">ℹ️ عن التطبيق</div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-label">الإصدار</div></div>
+            <span style="font-size:.82rem;color:var(--text-muted)">1.0.0</span>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><div class="setting-label">وفرة — إدارة مالية ذكية</div><div class="setting-desc">WAFRA FINANCE</div></div>
+            <span style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold)">وفرة</span>
+          </div>
+        </div>
       </div>
     </main>
   </div>
@@ -1134,6 +1250,7 @@ async function loadApp(firebaseUser) {
 
   fbListenTx(firebaseUser.uid);
   initNetworkMonitor();
+  handleUrlParams();
   showLockScreen();
   goPage('dashboard');
 }
@@ -1161,9 +1278,8 @@ function goPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const t = document.getElementById('page-'+name);
   if (t) t.classList.add('active');
-  // sidebar nav
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const navMap = {dashboard:0,transactions:1,income:2,expenses:3,reports:4,categories:5};
+  const navMap = {dashboard:0,transactions:1,income:2,expenses:3,reports:4,categories:5,settings:6};
   const items  = document.querySelectorAll('.nav-item');
   if (items[navMap[name]]) items[navMap[name]].classList.add('active');
   // bottom nav
@@ -1181,6 +1297,77 @@ function renderPage(name) {
   else if (name==='expenses') renderExpensesPage();
   else if (name==='reports') renderReports();
   else if (name==='categories') renderCategories();
+  else if (name==='settings') renderSettings();
+}
+
+// ════════════════════════════════════════
+//  SETTINGS LOGIC
+// ════════════════════════════════════════
+const SETTINGS_KEY = 'wafra_settings';
+function getSettings()       { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY))||{}; } catch { return {}; } }
+function saveSetting(k,v)    { const s=getSettings(); s[k]=v; localStorage.setItem(SETTINGS_KEY,JSON.stringify(s)); }
+function getSetting(k,def)   { const v=getSettings()[k]; return v===undefined?def:v; }
+
+function renderSettings() {
+  setToggle('biometric', getSetting('biometric', true));
+  setToggle('lockBg',    getSetting('lockBg',    true));
+  setToggle('theme',     !document.body.classList.contains('light'));
+  const cur = userProfile?.currency || 'SAR';
+  const el  = document.getElementById('setting-currency');
+  if (el) el.value = cur;
+  const lbl = document.getElementById('setting-currency-label');
+  if (lbl) lbl.textContent = 'العملة الحالية: ' + cur;
+  const syncEl = document.getElementById('sync-status-label');
+  if (syncEl) syncEl.textContent = navigator.onLine
+    ? 'Firebase Firestore — متصل ومزامَن' : 'Firebase Firestore — غير متصل (بيانات محلية)';
+}
+
+function setToggle(id, on) {
+  const el = document.getElementById('tog-'+id);
+  if (el) el.classList.toggle('on', !!on);
+}
+
+function toggleSetting(key) {
+  const cur = getSetting(key, true);
+  saveSetting(key, !cur);
+  setToggle(key, !cur);
+  const msgs = {
+    biometric: [' تم تفعيل التحقق الحيوي 🔒', 'تم إيقاف التحقق الحيوي 🔓'],
+    lockBg:    ['القفل التلقائي مفعّل 🔒',      'القفل التلقائي موقوف 🔓'],
+  };
+  if (msgs[key]) showToast(msgs[key][cur?1:0], 'success');
+}
+
+function resetBiometricCred() {
+  localStorage.removeItem(CRED_KEY);
+  showToast('🔑 سيُطلب تسجيل البصمة عند الفتح القادم', 'success');
+}
+
+async function saveCurrencySetting() {
+  const el = document.getElementById('setting-currency');
+  if (!el || !currentUser) return;
+  const newCur = el.value;
+  try {
+    await fbSaveProfile(currentUser.uid, { currency: newCur });
+    userProfile.currency = newCur;
+    document.getElementById('sidebar-currency').textContent = newCur;
+    document.getElementById('tx-currency-label').textContent = newCur;
+    const lbl = document.getElementById('setting-currency-label');
+    if (lbl) lbl.textContent = 'العملة الحالية: ' + newCur;
+    showToast('تم تغيير العملة إلى ' + newCur, 'success');
+  } catch(e) { showToast('فشل الحفظ','error'); }
+}
+
+function exportData() {
+  if (!transactions.length) { showToast('لا توجد بيانات للتصدير','error'); return; }
+  const data = { app:'وفرة', exportedAt:new Date().toISOString(),
+    user:userProfile?.name||'', currency:userProfile?.currency||'SAR', transactions };
+  const blob = new Blob([JSON.stringify(data,null,2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `wafra-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  showToast('تم تصدير ' + transactions.length + ' معاملة ✓', 'success');
 }
 
 // ════════════════════════════════════════
@@ -1809,19 +1996,18 @@ async function biometricVerify() {
 
 // ── SHOW / HIDE LOCK ──────────────────────
 function showLockScreen(pendingModal) {
+  if (!getSetting('biometric', true)) {
+    _appUnlocked = true;
+    if (pendingModal) setTimeout(() => openModal(), 80);
+    return;
+  }
   _appUnlocked  = false;
   _pendingModal = pendingModal || false;
-
-  // Hide ALL app content — no data visible whatsoever
   document.getElementById('app').style.visibility = 'hidden';
   document.getElementById('lock-screen').classList.add('show');
-
-  // Reset UI
   const msg = document.getElementById('lock-msg');
   msg.textContent = 'التحقق مطلوب للوصول إلى بياناتك';
   msg.className   = 'lock-msg';
-
-  // Auto-trigger after short delay
   setTimeout(triggerBiometric, 500);
 }
 
@@ -1913,9 +2099,31 @@ document.addEventListener('visibilitychange', () => {
     _lockTimer = setTimeout(() => { _appUnlocked = false; }, 500);
   } else {
     clearTimeout(_lockTimer);
-    if (currentUser && !_appUnlocked) showLockScreen();
+    if (currentUser && !_appUnlocked && getSetting('lockBg', true)) {
+      showLockScreen();
+    }
   }
 });
+
+// ── Handle PWA shortcuts URL params ──────
+function handleUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get('action');
+  const type   = params.get('type');
+  if (!action) return;
+  // Clean URL without reload
+  window.history.replaceState({}, '', './index.html');
+  if (action === 'quick-add' || action === 'add') {
+    // Open modal directly — works from lock screen too
+    if (!_appUnlocked && getSetting('biometric', true)) {
+      showLockScreen(true); // pendingModal=true → opens after unlock
+    } else {
+      setTimeout(() => openModal(type || null), 300);
+    }
+  } else if (action === 'reports') {
+    setTimeout(() => goPage('reports'), 300);
+  }
+}
 
 // ── Reset credential (for testing/settings) ──
 function resetBiometric() {
