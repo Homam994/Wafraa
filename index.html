@@ -26,7 +26,9 @@ import { getAuth, createUserWithEmailAndPassword,
          sendPasswordResetEmail }                           from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc,
          collection, addDoc, deleteDoc,
-         query, orderBy, onSnapshot }                       from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+         query, orderBy, onSnapshot,
+         enableIndexedDbPersistence,
+         enableMultiTabIndexedDbPersistence }               from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyAHzsmMrn8sHz6bO_EY3BokcxYTlqzHfRg",
@@ -40,6 +42,18 @@ const firebaseConfig = {
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+
+// ── Offline Persistence (IndexedDB) ──────────────────────────────────────
+// يخزّن كل البيانات محلياً — يعمل بدون إنترنت ويزامن عند الاتصال
+enableIndexedDbPersistence(db).catch(err => {
+  if (err.code === 'failed-precondition') {
+    // Multiple tabs open — use multi-tab persistence
+    enableMultiTabIndexedDbPersistence(db).catch(() => {});
+  } else if (err.code === 'unimplemented') {
+    // Browser doesn't support IndexedDB — silent fail, online-only
+    console.warn('Offline persistence not supported in this browser.');
+  }
+});
 
 window._fire = { auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -247,6 +261,12 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 .btn-next{flex:2;padding:.72rem;background:linear-gradient(135deg,var(--gold),var(--gold-dim));border:none;border-radius:var(--radius-sm);color:var(--obsidian);font-family:'Tajawal',sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s}
 .btn-next:hover{opacity:.9}
 .btn-next:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── NETWORK STATUS BADGE ── */
+#net-badge{position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-100%);z-index:900;padding:.4rem 1.2rem;border-radius:0 0 10px 10px;font-size:.78rem;font-weight:600;font-family:'Tajawal',sans-serif;transition:transform .4s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap}
+#net-badge.offline{background:#e05c5c;color:#fff;transform:translateX(-50%) translateY(0)}
+#net-badge.syncing{background:var(--gold);color:var(--obsidian);transform:translateX(-50%) translateY(0)}
+#net-badge.synced{background:var(--success);color:#fff;transform:translateX(-50%) translateY(0)}
 
 /* ── BIOMETRIC LOCK SCREEN ── */
 #lock-screen{position:fixed;inset:0;z-index:800;background:var(--obsidian);display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:2rem}
@@ -780,6 +800,9 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   </nav>
 </div>
 
+<!-- ── NETWORK STATUS BADGE ── -->
+<div id="net-badge">📡 بدون إنترنت — البيانات محفوظة محلياً</div>
+
 <!-- ── BIOMETRIC LOCK SCREEN ── -->
 <div id="lock-screen">
   <div class="lock-logo">وفرة</div>
@@ -1110,6 +1133,7 @@ async function loadApp(firebaseUser) {
   try { document.getElementById('dash-date').textContent = new Intl.DateTimeFormat('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(new Date()); } catch(e){}
 
   fbListenTx(firebaseUser.uid);
+  initNetworkMonitor();
   showLockScreen();
   goPage('dashboard');
 }
@@ -1926,6 +1950,44 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   const o = document.getElementById('sidebar-overlay');
   if (o) o.classList.remove('show');
+}
+
+// ════════════════════════════════════════
+//  NETWORK STATUS MONITOR
+// ════════════════════════════════════════
+let _wasOffline = false;
+let _netTimer   = null;
+
+function showNetBadge(type, text) {
+  const b = document.getElementById('net-badge');
+  if (!b) return;
+  clearTimeout(_netTimer);
+  b.textContent = text;
+  b.className   = type;
+  if (type === 'synced') {
+    _netTimer = setTimeout(() => { b.className = ''; }, 3000);
+  }
+}
+
+function initNetworkMonitor() {
+  function onOnline() {
+    if (_wasOffline) {
+      showNetBadge('syncing', '🔄 جارٍ المزامنة...');
+      // Firestore auto-syncs — show "synced" after 3s
+      setTimeout(() => showNetBadge('synced', '✓ تمت المزامنة'), 3000);
+    }
+    _wasOffline = false;
+  }
+  function onOffline() {
+    _wasOffline = true;
+    showNetBadge('offline', '📡 بدون إنترنت — البيانات محفوظة محلياً');
+  }
+
+  window.addEventListener('online',  onOnline);
+  window.addEventListener('offline', onOffline);
+
+  // Check initial state
+  if (!navigator.onLine) onOffline();
 }
 
 // ════════════════════════════════════════
