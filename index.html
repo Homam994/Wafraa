@@ -2105,106 +2105,174 @@ function applyTheme(mode) {
 }
 
 // ════════════════════════════════════════
-//  BIOMETRIC LOCK  —  WebAuthn (Face ID / بصمة / PIN)
-//  يسجّل credential حقيقي في الجهاز، لا يمكن تخطيه
+//  DEVICE LOCK  —  يستخدم طريقة قفل الشاشة حصراً
+//  (بصمة / وجه / PIN / رسم / كلمة مرور — أيا كانت)
+//  بدون تسجيل credential مسبق
 // ════════════════════════════════════════
-const CRED_KEY    = 'wafra_cred_id';   // localStorage key لحفظ ID الـ credential
-let _appUnlocked  = false;
-let _pendingModal = false;             // هل طُلب فتح المودال بعد القفل؟
+const CRED_KEY   = 'wafra_cred_id';
+let _appUnlocked = false;
+let _pendingModal = false;
 
-// ── Helpers ──────────────────────────────
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
-}
-function b64urlDecode(s) {
-  s = s.replace(/-/g,'+').replace(/_/g,'/');
-  while (s.length % 4) s += '=';
-  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
-}
-
-// ── Check support ─────────────────────────
-async function biometricSupported() {
+// ── Check if platform authenticator available ──
+async function deviceLockSupported() {
   if (!window.PublicKeyCredential) return false;
   try {
     return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
   } catch { return false; }
 }
 
-// ── REGISTER (first time only) ────────────
-async function biometricRegister(uid) {
-  const supported = await biometricSupported();
-  if (!supported) return false;
-
+// ── REGISTER once (stores credential id for future verify) ──
+async function deviceLockRegister() {
   try {
-    const challenge  = crypto.getRandomValues(new Uint8Array(32));
-    const userId     = new TextEncoder().encode(uid);
-    const hostname   = location.hostname || 'localhost';
+    const hostname = location.hostname || 'localhost';
+    const uid = currentUser?.uid || 'wafra';
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
 
     const cred = await navigator.credentials.create({
       publicKey: {
-        rp:               { name: 'وفرة', id: hostname },
-        user:             { id: userId, name: uid, displayName: 'مستخدم وفرة' },
+        rp:      { name: 'وفرة', id: hostname },
+        user:    {
+          id:          new TextEncoder().encode(uid),
+          name:        uid,
+          displayName: userProfile?.name || 'مستخدم وفرة'
+        },
         challenge,
         pubKeyCredParams: [
-          { type: 'public-key', alg: -7  },  // ES256
-          { type: 'public-key', alg: -257 }  // RS256 fallback
+          { type: 'public-key', alg: -7   },
+          { type: 'public-key', alg: -257 }
         ],
         authenticatorSelection: {
-          authenticatorAttachment: 'platform',   // جهاز المستخدم فقط
-          userVerification:        'required',    // إلزامي: بصمة/وجه/PIN
-          requireResidentKey:      true,
-          residentKey:             'required'
+          authenticatorAttachment: 'platform',
+          userVerification:        'required',
+          residentKey:             'preferred'
         },
-        timeout: 60000
+        timeout: 120000
       }
     });
 
-    if (cred) {
-      localStorage.setItem(CRED_KEY, b64url(cred.rawId));
-      return true;
+    if (cred?.rawId) {
+      // Store credential id as base64url
+      const raw = new Uint8Array(cred.rawId);
+      const b64 = btoa(String.fromCharCode(...raw))
+                    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+      localStorage.setItem(CRED_KEY, b64);
+      return { ok: true };
     }
+    return { ok: false };
   } catch(e) {
-    console.warn('biometricRegister:', e.name, e.message);
+    console.warn('register:', e.name, e.message);
+    if (e.name === 'NotAllowedError') return { ok: false, cancelled: true };
+    if (e.name === 'NotSupportedError') return { ok: false, unsupported: true };
+    return { ok: false, error: e };
   }
-  return false;
 }
 
-// ── VERIFY ───────────────────────────────
-async function biometricVerify() {
-  const supported = await biometricSupported();
-  if (!supported) return { ok: false, unsupported: true };
-
-  const credId = localStorage.getItem(CRED_KEY);
-  const hostname = location.hostname || 'localhost';
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-
+// ── VERIFY using stored credential ──
+async function deviceLockVerify() {
   try {
-    const opts = {
+    const hostname  = location.hostname || 'localhost';
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const credId    = localStorage.getItem(CRED_KEY);
+
+    const getOptions = {
       publicKey: {
         challenge,
-        timeout:         60000,
         rpId:            hostname,
-        userVerification:'required',
+        userVerification: 'required',
+        timeout:          120000,
+        // Pass stored credential so device knows which key to use
+        // Empty array = let device pick (works on most platforms)
         allowCredentials: credId ? [{
-          type: 'public-key',
-          id:   b64urlDecode(credId),
+          type:       'public-key',
+          id:          Uint8Array.from(atob(
+                         credId.replace(/-/g,'+').replace(/_/g,'/')
+                               .padEnd(credId.length + (4 - credId.length%4)%4,'=')
+                       ), c => c.charCodeAt(0)),
           transports: ['internal']
         }] : []
       }
     };
-    const assertion = await navigator.credentials.get(opts);
+
+    const assertion = await navigator.credentials.get(getOptions);
     if (assertion) return { ok: true };
+    return { ok: false };
   } catch(e) {
+    console.warn('verify:', e.name, e.message);
     if (e.name === 'NotAllowedError')  return { ok: false, cancelled: true };
-    if (e.name === 'NotSupportedError' || e.name === 'InvalidStateError')
-      return { ok: false, unsupported: true };
-    console.warn('biometricVerify:', e.name, e.message);
+    if (e.name === 'InvalidStateError' ||
+        e.name === 'NotSupportedError') return { ok: false, unsupported: true };
+    // If no credential found → need to register first
+    if (e.name === 'AbortError')       return { ok: false, cancelled: true };
+    return { ok: false, needsRegister: true };
   }
-  return { ok: false };
 }
 
-// ── SHOW / HIDE LOCK ──────────────────────
+// ── MAIN TRIGGER ─────────────────────────
+async function triggerBiometric() {
+  const btn = document.getElementById('lock-btn');
+  const msg = document.getElementById('lock-msg');
+  btn.classList.add('pulse');
+  msg.className   = 'lock-msg';
+  msg.textContent = 'جارٍ التحقق...';
+
+  const supported = await deviceLockSupported();
+  if (!supported) {
+    // Device has no platform authenticator — skip lock
+    btn.classList.remove('pulse');
+    msg.textContent = 'التحقق غير متاح على هذا الجهاز';
+    msg.className   = 'lock-msg';
+    setTimeout(hideLockScreen, 1500);
+    return;
+  }
+
+  const credId = localStorage.getItem(CRED_KEY);
+
+  if (!credId) {
+    // First time — register
+    msg.textContent = 'سجّل طريقة قفل شاشتك للمرة الأولى...';
+    const result = await deviceLockRegister();
+    btn.classList.remove('pulse');
+    if (result.ok) {
+      msg.textContent = '✓ تم التسجيل';
+      msg.style.color = 'var(--success)';
+      setTimeout(hideLockScreen, 600);
+    } else if (result.unsupported) {
+      setTimeout(hideLockScreen, 500);
+    } else if (result.cancelled) {
+      _setLockError('تم الإلغاء. اضغط مجدداً للمحاولة.');
+    } else {
+      _setLockError('فشل التسجيل. تأكد أن لديك قفل شاشة مفعّل.');
+    }
+    return;
+  }
+
+  // Verify
+  const result = await deviceLockVerify();
+  btn.classList.remove('pulse');
+
+  if (result.ok) {
+    msg.textContent = '✓ مرحباً!';
+    msg.style.color = 'var(--success)';
+    setTimeout(hideLockScreen, 350);
+  } else if (result.needsRegister) {
+    // Credential was deleted from device — re-register
+    localStorage.removeItem(CRED_KEY);
+    msg.textContent = 'يلزم إعادة التسجيل. اضغط مجدداً.';
+    msg.className   = 'lock-msg';
+    btn.classList.remove('pulse');
+  } else if (result.unsupported) {
+    setTimeout(hideLockScreen, 500);
+  } else if (result.cancelled) {
+    _setLockError('تم الإلغاء. اضغط مجدداً.');
+  } else {
+    _setLockError('فشل التحقق. اضغط مجدداً.');
+  }
+}
+
+function _setLockError(text) {
+  const msg = document.getElementById('lock-msg');
+  if (msg) { msg.textContent = text; msg.className = 'lock-msg error'; }
+}
 function showLockScreen(pendingModal) {
   if (!getSetting('biometric', true)) {
     _appUnlocked = true;
@@ -2230,56 +2298,6 @@ function hideLockScreen() {
     _pendingModal = false;
     setTimeout(() => openModal(), 80);
   }
-}
-
-// ── MAIN TRIGGER ─────────────────────────
-async function triggerBiometric() {
-  const btn = document.getElementById('lock-btn');
-  const msg = document.getElementById('lock-msg');
-  btn.classList.add('pulse');
-  msg.className   = 'lock-msg';
-  msg.textContent = 'جارٍ التحقق...';
-
-  // If no credential registered yet → register first
-  const credId = localStorage.getItem(CRED_KEY);
-  if (!credId) {
-    msg.textContent = 'سيتم تسجيل بصمتك/هويتك للمرة الأولى...';
-    const registered = await biometricRegister(currentUser?.uid || 'wafra-user');
-    btn.classList.remove('pulse');
-    if (registered) {
-      msg.textContent = '✓ تم التسجيل بنجاح!';
-      msg.style.color = 'var(--success)';
-      setTimeout(hideLockScreen, 600);
-    } else {
-      _showLockError('التسجيل غير متاح على هذا الجهاز.');
-    }
-    return;
-  }
-
-  // Verify existing credential
-  const result = await biometricVerify();
-  btn.classList.remove('pulse');
-
-  if (result.ok) {
-    msg.textContent = '✓ تم التحقق';
-    msg.style.color = 'var(--success)';
-    setTimeout(hideLockScreen, 400);
-  } else if (result.unsupported) {
-    // Device has no biometric — allow access with warning
-    msg.textContent = 'التحقق الحيوي غير متاح على هذا الجهاز.';
-    msg.className   = 'lock-msg';
-    setTimeout(hideLockScreen, 1500);
-  } else if (result.cancelled) {
-    _showLockError('تم إلغاء التحقق. اضغط مجدداً.');
-  } else {
-    _showLockError('فشل التحقق. اضغط مجدداً.');
-  }
-}
-
-function _showLockError(text) {
-  const msg = document.getElementById('lock-msg');
-  msg.textContent = text;
-  msg.className   = 'lock-msg error';
 }
 
 // ── Quick-add from lock (modal only, no data) ──
