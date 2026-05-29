@@ -959,20 +959,9 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
 <!-- ── NETWORK STATUS BADGE ── -->
 <div id="net-badge">📡 بدون إنترنت — البيانات محفوظة محلياً</div>
 
-<!-- ── BIOMETRIC LOCK SCREEN ── -->
+<!-- ── BIOMETRIC / PIN LOCK SCREEN ── -->
 <div id="lock-screen">
-  <img src="logo.png" alt="وفرة" style="height:60px;display:inline-block;filter:drop-shadow(0 2px 10px rgba(201,168,76,.25));">
-  <div class="lock-icon" id="lock-btn" onclick="triggerBiometric()">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="38" height="38">
-      <rect x="3" y="11" width="18" height="11" rx="2"/>
-      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-      <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
-    </svg>
-  </div>
-  <div class="lock-msg" id="lock-msg">التحقق مطلوب للوصول إلى بياناتك</div>
-  <button class="lock-add-btn" onclick="openModalFromLock()">
-    ⚡ إضافة معاملة بدون فتح
-  </button>
+  <!-- يُملأ ديناميكياً بـ _renderLockUI() -->
 </div>
 
 <!-- ── CONFIRM DELETE DIALOG ── -->
@@ -1107,6 +1096,14 @@ let txType     = null;
 let txMainCat  = null;
 let txSubCat   = null;
 let editingTxId = null;
+
+// lock state — مُعلَنة هنا لأن doLogout يستخدمها قبل كتلة القفل
+let _appUnlocked         = false;
+let _pendingModal        = false;
+let _platformAuthSupported = null;
+let _pinBuffer    = '';
+let _pinSetupStep = 0;
+let _pinSetupFirst = '';
 
 // ════════════════════════════════════════
 //  DATA LAYER  (Firebase Firestore)
@@ -1266,17 +1263,16 @@ async function doLogout() {
   currentUser  = null;
   userProfile  = null;
   transactions = [];
-  // إعادة تعيين حالة التقارير (كانت تحتفظ بالشهر بعد الخروج)
   reportYear   = undefined;
   reportMonth  = undefined;
-  // إعادة تعيين cache دعم المصادقة البيومترية
   _platformAuthSupported = null;
-  // إعادة تعيين حالة القفل
   _appUnlocked  = false;
   _pendingModal = false;
+  _pinBuffer    = '';
+  _pinSetupStep = 0;
+  _pinSetupFirst = '';
   const { auth, signOut } = F();
   await signOut(auth);
-  // onAuthStateChanged handles UI reset
 }
 
 function showAuthMsg(msg, type) {
@@ -1294,8 +1290,11 @@ async function loadApp(firebaseUser) {
     userProfile = { name: firebaseUser.displayName || firebaseUser.email.split('@')[0], currency: 'SAR' };
     await fbSaveProfile(firebaseUser.uid, userProfile);
   }
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
+
+  const appEl  = document.getElementById('app');
+  const authEl = document.getElementById('auth-screen');
+  if (authEl) authEl.style.display = 'none';
+  if (appEl)  { appEl.style.display = 'block'; appEl.style.visibility = 'visible'; }
 
   const initial = (userProfile.name||'؟').charAt(0).toUpperCase();
   document.getElementById('sidebar-avatar').textContent    = initial;
@@ -1305,13 +1304,26 @@ async function loadApp(firebaseUser) {
   document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
   try { document.getElementById('dash-date').textContent = new Intl.DateTimeFormat('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(new Date()); } catch(e){}
 
-  // ⚡ تحميل cache دعم المصادقة مبكراً — يُزيل التأخير عند أول فتح للقفل
-  deviceLockSupported().catch(() => {});
+  // ⚡ تحميل cache دعم المصادقة مسبقاً بدون انتظار
+  _webAuthnSupported().catch(() => {});
 
   fbListenTx(firebaseUser.uid);
   initNetworkMonitor();
   handleUrlParams();
-  showLockScreen();
+
+  // عرض القفل فقط إن لم يكن ظاهراً بالفعل من _hideLoaderFast
+  const ls = document.getElementById('lock-screen');
+  const lockAlreadyShown = ls && ls.classList.contains('show');
+  if (!lockAlreadyShown) {
+    showLockScreen();
+  } else {
+    // القفل ظاهر بالفعل — تأكد فقط من حالة _appUnlocked
+    if (!getSetting('biometric', false)) {
+      _appUnlocked = true;
+      ls.classList.remove('show');
+    }
+  }
+
   goPage('dashboard');
 }
 
@@ -1371,7 +1383,7 @@ async function _hideLoaderFast() {
   const authEl = document.getElementById('auth-screen');
   const appEl  = document.getElementById('app');
 
-  // Fade out loader
+  // إخفاء اللودر
   if (loader) {
     loader.style.transition = 'opacity .12s';
     loader.style.opacity    = '0';
@@ -1381,11 +1393,31 @@ async function _hideLoaderFast() {
   const hasSession = await _sessionPromise;
 
   if (hasSession) {
-    // Known user — keep blank (no flash) until Firebase confirms
+    // مستخدم معروف — اعرض شاشة القفل فوراً بدلاً من الفراغ
     if (authEl) authEl.style.display = 'none';
-    if (appEl)  appEl.style.display  = 'none';
+    if (appEl)  { appEl.style.display = 'block'; appEl.style.visibility = 'visible'; }
+
+    // إن كان القفل مفعّلاً — اعرضه فوراً (بدون انتظار Firebase)
+    if (getSetting('biometric', false)) {
+      const ls = document.getElementById('lock-screen');
+      if (ls) {
+        ls.style.zIndex = '800';
+        ls.classList.add('show');
+        // رسم واجهة القفل المناسبة
+        const method = localStorage.getItem(LOCK_METHOD_KEY) || 'none';
+        if (method === 'pin') {
+          _pinBuffer = '';
+          _renderLockPin(false);
+        } else if (method === 'biometric') {
+          _renderLockBiometric();
+        } else {
+          _renderLockSetup();
+        }
+      }
+    }
+    // Firebase سيُكمل loadApp() ويُحدّث البيانات عند جهوزيته
   } else {
-    // Not logged in — show auth immediately
+    // غير مسجّل — اعرض شاشة الدخول فوراً
     if (authEl) authEl.style.display = 'flex';
     if (appEl)  appEl.style.display  = 'none';
   }
@@ -1472,9 +1504,17 @@ function renderSettings() {
   const syncEl = document.getElementById('sync-status-label');
   if (syncEl) syncEl.textContent = navigator.onLine
     ? 'Firebase Firestore — متصل ومزامَن' : 'Firebase Firestore — غير متصل (بيانات محلية)';
-  // إظهار/إخفاء زر إعادة تعيين البصمة بناءً على وجود credential مسجّل
+
+  // عرض طريقة القفل الحالية
   const resetRow = document.getElementById('sr-biometric-reset');
-  if (resetRow) resetRow.style.display = localStorage.getItem(CRED_KEY) ? '' : 'none';
+  if (resetRow) {
+    const method = localStorage.getItem(LOCK_METHOD_KEY) || 'none';
+    const methodLabel = { biometric:'بصمة/وجه', pin:'رمز PIN', none:'—' }[method] || '—';
+    const descEl = resetRow.querySelector('.setting-desc');
+    if (descEl) descEl.textContent = 'الطريقة الحالية: ' + methodLabel + ' — اضغط لإعادة الإعداد';
+    resetRow.style.display = getSetting('biometric', false) ? '' : 'none';
+  }
+
   _updateShortcutRow();
 }
 
@@ -1496,9 +1536,10 @@ function toggleSetting(key) {
 
 function resetBiometricCred() {
   localStorage.removeItem(CRED_KEY);
-  const resetRow = document.getElementById('sr-biometric-reset');
-  if (resetRow) resetRow.style.display = 'none';
-  showToast('🔑 سيُطلب تسجيل البصمة عند الفتح القادم', 'success');
+  localStorage.removeItem(PIN_HASH_KEY);
+  localStorage.removeItem(LOCK_METHOD_KEY);
+  showToast('🔑 سيُطلب إعداد طريقة القفل عند الفتح القادم', 'success');
+  renderSettings();
 }
 
 async function saveCurrencySetting() {
@@ -2227,229 +2268,450 @@ function applyTheme(mode) {
 }
 
 // ════════════════════════════════════════
-//  DEVICE LOCK  —  يستخدم طريقة قفل الشاشة حصراً
-//  (بصمة / وجه / PIN / رسم / كلمة مرور — أيا كانت)
-//  بدون تسجيل credential مسبق
+//  LOCK SYSTEM v3 — نظام قفل شامل يعمل على جميع الأجهزة
+//
+//  منطق الأولوية:
+//    1. WebAuthn (بصمة/وجه) — إن كان الجهاز يدعمه ولديه credential مسجّل
+//    2. PIN داخلي 4 أرقام  — fallback مضمون يعمل على أي جهاز
+//    3. بدون قفل            — إن أوقف المستخدم الميزة
+//
+//  الشاشة الفارغة: حُلّت بعرض شاشة القفل فوراً دون الانتظار
 // ════════════════════════════════════════
-const CRED_KEY   = 'wafra_cred_id';
-let _appUnlocked = false;
-let _pendingModal = false;
-// ⚡ Cache نتيجة دعم المصادقة — تُحسب مرة واحدة فقط لتجنب التأخير
-let _platformAuthSupported = null;
+const CRED_KEY        = 'wafra_cred_id';
+const PIN_HASH_KEY    = 'wafra_pin_hash';
+const LOCK_METHOD_KEY = 'wafra_lock_method'; // 'biometric' | 'pin' | 'none'
+// (_appUnlocked, _pendingModal, _platformAuthSupported, _pinBuffer, _pinSetupStep, _pinSetupFirst مُعلَنة في STATE أعلى)
 
-// ── فحص دعم المصادقة — مع cache ──
-async function deviceLockSupported() {
+// ── hash بسيط للـ PIN (SHA-256 عبر Web Crypto) ──
+async function _hashPin(pin) {
+  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('wafra_pin_' + pin));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── فحص دعم WebAuthn — مع cache ──
+async function _webAuthnSupported() {
   if (_platformAuthSupported !== null) return _platformAuthSupported;
-  if (!window.PublicKeyCredential) {
-    _platformAuthSupported = false;
-    return false;
-  }
+  if (!window.PublicKeyCredential) { _platformAuthSupported = false; return false; }
   try {
     _platformAuthSupported =
       await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-  } catch {
-    _platformAuthSupported = false;
-  }
+  } catch { _platformAuthSupported = false; }
   return _platformAuthSupported;
 }
 
-// ── تسجيل أول مرة ──
-async function deviceLockRegister() {
+// ── تسجيل WebAuthn ──
+async function _webAuthnRegister() {
   try {
-    const hostname = location.hostname || 'localhost';
-    const uid      = currentUser?.uid || 'wafra';
+    const hostname  = location.hostname || 'localhost';
+    const uid       = currentUser?.uid  || 'wafra';
     const challenge = crypto.getRandomValues(new Uint8Array(32));
-
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        rp:      { name: 'وفرة', id: hostname },
-        user:    {
-          id:          new TextEncoder().encode(uid),
-          name:        uid,
-          displayName: userProfile?.name || 'مستخدم وفرة'
-        },
-        challenge,
-        pubKeyCredParams: [
-          { type: 'public-key', alg: -7   },
-          { type: 'public-key', alg: -257 }
-        ],
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform',
-          userVerification:        'required',
-          residentKey:             'preferred'
-        },
-        timeout: 60000 // تقليل من 120s → 60s
-      }
-    });
-
+    const cred = await navigator.credentials.create({ publicKey: {
+      rp: { name: 'وفرة', id: hostname },
+      user: { id: new TextEncoder().encode(uid), name: uid,
+              displayName: userProfile?.name || 'مستخدم وفرة' },
+      challenge,
+      pubKeyCredParams: [{ type:'public-key', alg:-7 }, { type:'public-key', alg:-257 }],
+      authenticatorSelection: { authenticatorAttachment:'platform',
+                                userVerification:'required', residentKey:'preferred' },
+      timeout: 60000
+    }});
     if (cred?.rawId) {
-      const raw = new Uint8Array(cred.rawId);
-      const b64 = btoa(String.fromCharCode(...raw))
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)))
                     .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
       localStorage.setItem(CRED_KEY, b64);
+      localStorage.setItem(LOCK_METHOD_KEY, 'biometric');
       return { ok: true };
     }
     return { ok: false };
   } catch(e) {
-    console.warn('register:', e.name, e.message);
     if (e.name === 'NotAllowedError')   return { ok: false, cancelled: true };
     if (e.name === 'NotSupportedError') return { ok: false, unsupported: true };
     return { ok: false, error: e };
   }
 }
 
-// ── التحقق — مُحسَّن لتجنب التأخير ──
-async function deviceLockVerify() {
+// ── تحقق WebAuthn ──
+async function _webAuthnVerify() {
   try {
     const hostname  = location.hostname || 'localhost';
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
     const credId    = localStorage.getItem(CRED_KEY);
-
-    // ⚡ المفتاح: دائماً مرر allowCredentials إن كان credId موجوداً
-    // هذا يمنع المتصفح من البحث الشبكي عن resident keys ويُزيل التأخير
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
     const allowCredentials = credId ? [{
       type: 'public-key',
-      id: Uint8Array.from(
-        atob(credId.replace(/-/g,'+').replace(/_/g,'/')
-               .padEnd(credId.length + (4 - credId.length % 4) % 4, '=')),
-        c => c.charCodeAt(0)
-      ),
+      id: Uint8Array.from(atob(
+            credId.replace(/-/g,'+').replace(/_/g,'/')
+                  .padEnd(credId.length + (4 - credId.length%4)%4, '=')),
+          c => c.charCodeAt(0)),
       transports: ['internal']
     }] : [];
-
-    const assertion = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        rpId:             hostname,
-        userVerification: 'required',
-        timeout:          60000, // تقليل من 120s → 60s
-        allowCredentials  // دائماً محدد
-      }
-    });
-
-    return assertion ? { ok: true } : { ok: false };
+    const r = await navigator.credentials.get({ publicKey: {
+      challenge, rpId: hostname, userVerification: 'required',
+      timeout: 60000, allowCredentials
+    }});
+    return r ? { ok: true } : { ok: false };
   } catch(e) {
-    console.warn('verify:', e.name, e.message);
-    if (e.name === 'NotAllowedError')   return { ok: false, cancelled: true };
-    if (e.name === 'InvalidStateError' ||
-        e.name === 'NotSupportedError') return { ok: false, unsupported: true };
-    if (e.name === 'AbortError')        return { ok: false, cancelled: true };
-    // credential غير موجود في الجهاز — إعادة تسجيل
+    if (e.name === 'NotAllowedError' || e.name === 'AbortError')
+      return { ok: false, cancelled: true };
+    if (e.name === 'InvalidStateError' || e.name === 'NotSupportedError')
+      return { ok: false, unsupported: true };
+    // credential غير موجود في الجهاز
     return { ok: false, needsRegister: true };
   }
 }
 
-// ── MAIN TRIGGER ─────────────────────────
-async function triggerBiometric() {
-  const btn = document.getElementById('lock-btn');
-  const msg = document.getElementById('lock-msg');
-  btn.classList.add('pulse');
-  msg.className   = 'lock-msg';
-  msg.textContent = 'جارٍ التحقق...';
+// ════════════════════════════════════════
+//  واجهة شاشة القفل — تُعيد رسم نفسها
+//  حسب الوضع الحالي (biometric / pin / setup)
+// ════════════════════════════════════════
 
-  // استخدام الـ cache — لا استدعاء async بطيء في كل مرة
-  const supported = await deviceLockSupported();
-  if (!supported) {
-    btn.classList.remove('pulse');
-    msg.textContent = 'التحقق غير متاح على هذا الجهاز';
-    msg.className   = 'lock-msg';
-    setTimeout(hideLockScreen, 1200);
-    return;
-  }
-
-  const credId = localStorage.getItem(CRED_KEY);
-
-  if (!credId) {
-    // أول مرة — تسجيل
-    msg.textContent = 'سجّل طريقة قفل شاشتك للمرة الأولى...';
-    const result = await deviceLockRegister();
-    btn.classList.remove('pulse');
-    if (result.ok) {
-      msg.textContent = '✓ تم التسجيل بنجاح';
-      msg.style.color = 'var(--success)';
-      setTimeout(hideLockScreen, 500);
-    } else if (result.unsupported) {
-      setTimeout(hideLockScreen, 400);
-    } else if (result.cancelled) {
-      _setLockError('تم الإلغاء — اضغط مجدداً للمحاولة');
-    } else {
-      _setLockError('فعّل قفل الشاشة في إعدادات جهازك أولاً');
-    }
-    return;
-  }
-
-  // تحقق مباشر بدون تأخير
-  const result = await deviceLockVerify();
-  btn.classList.remove('pulse');
-
-  if (result.ok) {
-    msg.textContent = '✓ مرحباً!';
-    msg.style.color = 'var(--success)';
-    setTimeout(hideLockScreen, 300);
-  } else if (result.needsRegister) {
-    // credential حُذف من الجهاز — إعادة تسجيل تلقائية
-    localStorage.removeItem(CRED_KEY);
-    msg.textContent = 'يلزم إعادة التسجيل — اضغط مجدداً';
-    msg.className   = 'lock-msg';
-  } else if (result.unsupported) {
-    setTimeout(hideLockScreen, 400);
-  } else if (result.cancelled) {
-    _setLockError('تم الإلغاء — اضغط مجدداً');
-  } else {
-    _setLockError('فشل التحقق — اضغط مجدداً');
-  }
+function _lockMethod() {
+  return localStorage.getItem(LOCK_METHOD_KEY) || 'none';
 }
 
-function _setLockError(text) {
-  const msg = document.getElementById('lock-msg');
-  if (msg) { msg.textContent = text; msg.className = 'lock-msg error'; }
-}
-
+// ── عرض شاشة القفل فوراً بدون انتظار ──
 function showLockScreen(pendingModal) {
   if (!getSetting('biometric', false)) {
+    // القفل مُعطَّل — فتح مباشر
     _appUnlocked = true;
     if (pendingModal) setTimeout(() => openModal(), 80);
     return;
   }
   _appUnlocked  = false;
-  _pendingModal = pendingModal || false;
-  document.getElementById('app').style.visibility = 'hidden';
+  _pendingModal = !!pendingModal;
+
   const ls = document.getElementById('lock-screen');
-  ls.style.zIndex = '800'; // تأكيد z-index الصحيح عند كل فتح
+  ls.style.zIndex = '800';
   ls.classList.add('show');
+  // التطبيق مخفي خلف القفل — لا visibility:hidden هنا لأن القفل يغطيه
+  // (visibility:hidden يسبب شاشة فارغة قبل ظهور القفل)
+  document.getElementById('app').style.visibility = 'visible';
+
+  _renderLockUI();
+}
+
+// ── رسم واجهة القفل حسب الوضع ──
+function _renderLockUI() {
+  const method = _lockMethod();
+
+  if (method === 'biometric') {
+    _renderLockBiometric();
+  } else if (method === 'pin') {
+    _pinBuffer = '';
+    _renderLockPin(false);
+  } else {
+    // أول مرة — اختيار طريقة القفل
+    _renderLockSetup();
+  }
+}
+
+// ── واجهة البصمة ──
+function _renderLockBiometric() {
+  const ls = document.getElementById('lock-screen');
+  ls.innerHTML = `
+    <img src="logo.png" alt="وفرة" style="height:56px;filter:drop-shadow(0 2px 10px rgba(201,168,76,.25));">
+    <div class="lock-icon" id="lock-btn" onclick="triggerBiometric()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="38" height="38">
+        <rect x="3" y="11" width="18" height="11" rx="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
+      </svg>
+    </div>
+    <div class="lock-msg" id="lock-msg">اضغط للتحقق بالبصمة أو قفل الشاشة</div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:.6rem;margin-top:.5rem">
+      <button class="lock-add-btn" onclick="openModalFromLock()">⚡ إضافة معاملة بدون فتح</button>
+      <button class="lock-add-btn" onclick="_switchToPinFallback()" style="font-size:.78rem;opacity:.6">استخدام رمز PIN بدلاً</button>
+    </div>`;
+  // ابدأ التحقق تلقائياً بعد 300ms (تجربة أفضل)
+  setTimeout(() => { if (document.getElementById('lock-btn')) triggerBiometric(); }, 300);
+}
+
+// ── واجهة PIN ──
+function _renderLockPin(isSetup, subtitle) {
+  const ls = document.getElementById('lock-screen');
+  const title   = isSetup
+    ? (_pinSetupStep === 0 ? 'أنشئ رمز PIN' : 'أكّد رمز PIN')
+    : 'أدخل رمز PIN';
+  const subtext = subtitle ||
+    (isSetup
+      ? (_pinSetupStep === 0 ? 'اختر رمزاً مكوناً من 4 أرقام' : 'أدخل الرمز مرة أخرى للتأكيد')
+      : 'أدخل رمزك للوصول إلى بياناتك');
+
+  ls.innerHTML = `
+    <img src="logo.png" alt="وفرة" style="height:48px;filter:drop-shadow(0 2px 10px rgba(201,168,76,.25));">
+    <div style="text-align:center">
+      <div style="font-size:1.05rem;font-weight:600;color:var(--text-primary);margin-bottom:.3rem">${title}</div>
+      <div class="lock-msg" id="lock-msg" style="min-height:1.4rem">${subtext}</div>
+    </div>
+    <div id="pin-dots" style="display:flex;gap:.85rem;margin:.2rem 0">
+      ${[0,1,2,3].map(i=>`
+        <div id="pd-${i}" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--border);
+          background:transparent;transition:background .15s,border-color .15s"></div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,72px);gap:.6rem">
+      ${[1,2,3,4,5,6,7,8,9,'','0','⌫'].map(k => k==='' ? '<div></div>' : `
+        <button onclick="_pinKey('${k}')"
+          style="height:64px;border-radius:14px;background:var(--obsidian-3);border:1px solid var(--border);
+            color:var(--text-primary);font-family:'Tajawal',sans-serif;font-size:${k==='⌫'?'1.3':'1.4'}rem;
+            font-weight:600;cursor:pointer;transition:background .1s,transform .1s;
+            -webkit-tap-highlight-color:transparent"
+          onpointerdown="this.style.background='var(--obsidian-4)';this.style.transform='scale(.93)'"
+          onpointerup="this.style.background='var(--obsidian-3)';this.style.transform=''"
+          onpointerleave="this.style.background='var(--obsidian-3)';this.style.transform=''"
+        >${k}</button>`).join('')}
+    </div>
+    ${!isSetup ? `<button class="lock-add-btn" onclick="openModalFromLock()" style="margin-top:.3rem">⚡ إضافة معاملة بدون فتح</button>` : ''}
+    ${!isSetup && _lockMethod()==='pin' ? `` : ''}`;
+  _pinBuffer = '';
+  _updatePinDots();
+}
+
+// ── واجهة الإعداد الأولي ──
+function _renderLockSetup() {
+  const ls = document.getElementById('lock-screen');
+  ls.innerHTML = `
+    <img src="logo.png" alt="وفرة" style="height:56px;filter:drop-shadow(0 2px 10px rgba(201,168,76,.25));">
+    <div style="text-align:center;max-width:280px">
+      <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);margin-bottom:.4rem">🔒 حماية بياناتك</div>
+      <div style="font-size:.85rem;color:var(--text-secondary);line-height:1.6">اختر طريقة لحماية بيانات وفرة</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;width:100%;max-width:280px">
+      <button id="setup-bio-btn" onclick="_setupBiometric()"
+        style="padding:1rem;border-radius:14px;background:var(--obsidian-3);border:1px solid var(--border);
+          color:var(--text-primary);font-family:'Tajawal',sans-serif;font-size:.95rem;cursor:pointer;
+          display:flex;align-items:center;gap:.85rem;transition:border-color .2s">
+        <span style="font-size:1.6rem">🫆</span>
+        <div style="text-align:right;flex:1">
+          <div style="font-weight:600">بصمة / وجه / قفل الشاشة</div>
+          <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px">يستخدم مصادقة جهازك</div>
+        </div>
+      </button>
+      <button onclick="_setupPin()"
+        style="padding:1rem;border-radius:14px;background:var(--obsidian-3);border:1px solid var(--border);
+          color:var(--text-primary);font-family:'Tajawal',sans-serif;font-size:.95rem;cursor:pointer;
+          display:flex;align-items:center;gap:.85rem;transition:border-color .2s">
+        <span style="font-size:1.6rem">🔢</span>
+        <div style="text-align:right;flex:1">
+          <div style="font-weight:600">رمز PIN مكوّن من 4 أرقام</div>
+          <div style="font-size:.73rem;color:var(--text-muted);margin-top:2px">يعمل على جميع الأجهزة</div>
+        </div>
+      </button>
+    </div>
+    <button onclick="_setupSkip()"
+      style="background:none;border:none;color:var(--text-muted);font-family:'Tajawal',sans-serif;
+        font-size:.82rem;cursor:pointer;margin-top:.25rem;padding:.4rem .8rem">
+      تخطي — فتح التطبيق الآن
+    </button>`;
+  // فحص دعم WebAuthn مسبقاً
+  _webAuthnSupported().then(ok => {
+    const bioBtn = document.getElementById('setup-bio-btn');
+    if (!ok && bioBtn) {
+      bioBtn.style.opacity = '.45';
+      bioBtn.querySelector('div div:last-child').textContent = 'غير متاح على هذا الجهاز';
+      bioBtn.onclick = () => _setLockMsg('البصمة غير متاحة — استخدم رمز PIN', true);
+    }
+  });
+}
+
+// ── منطق PIN ──
+function _pinKey(k) {
+  const isSetup = (_lockMethod() === 'none' && _pinSetupStep >= 0 &&
+                   document.getElementById('pin-dots'));
+  if (k === '⌫') {
+    _pinBuffer = _pinBuffer.slice(0, -1);
+  } else if (_pinBuffer.length < 4) {
+    _pinBuffer += k;
+  }
+  _updatePinDots();
+  if (_pinBuffer.length === 4) {
+    setTimeout(() => _pinSubmit(), 120);
+  }
+}
+
+function _updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const d = document.getElementById('pd-' + i);
+    if (!d) return;
+    const filled = i < _pinBuffer.length;
+    d.style.background      = filled ? 'var(--gold)' : 'transparent';
+    d.style.borderColor     = filled ? 'var(--gold)' : 'var(--border)';
+    d.style.transform       = filled ? 'scale(1.15)' : 'scale(1)';
+  }
+}
+
+async function _pinSubmit() {
+  const method = _lockMethod();
+
+  if (method === 'none') {
+    // وضع الإعداد
+    if (_pinSetupStep === 0) {
+      _pinSetupFirst = _pinBuffer;
+      _pinSetupStep  = 1;
+      _pinBuffer     = '';
+      _renderLockPin(true);
+    } else {
+      if (_pinBuffer === _pinSetupFirst) {
+        const hash = await _hashPin(_pinBuffer);
+        localStorage.setItem(PIN_HASH_KEY,    hash);
+        localStorage.setItem(LOCK_METHOD_KEY, 'pin');
+        _pinSetupStep = 0; _pinSetupFirst = '';
+        hideLockScreen();
+      } else {
+        _pinSetupStep = 0; _pinSetupFirst = '';
+        _pinBuffer    = '';
+        _renderLockPin(true, 'الرمزان غير متطابقَين — ابدأ من جديد');
+      }
+    }
+  } else {
+    // وضع التحقق
+    const stored = localStorage.getItem(PIN_HASH_KEY);
+    const hash   = await _hashPin(_pinBuffer);
+    if (hash === stored) {
+      _setLockMsg('✓ مرحباً!', false, 'var(--success)');
+      setTimeout(hideLockScreen, 280);
+    } else {
+      _pinBuffer = '';
+      _updatePinDots();
+      _setLockMsg('رمز PIN غير صحيح — حاول مجدداً', true);
+    }
+  }
+}
+
+function _setLockMsg(text, isError, color) {
   const msg = document.getElementById('lock-msg');
-  msg.textContent = 'اضغط على القفل لفتح التطبيق، أو أضف معاملة مباشرة';
-  msg.className   = 'lock-msg';
-  msg.style.color = ''; // إعادة تعيين اللون (قد يكون بقي أخضر من مرة سابقة)
+  if (!msg) return;
+  msg.textContent = text;
+  msg.className   = 'lock-msg' + (isError ? ' error' : '');
+  msg.style.color = color || '';
+}
+
+// ── إعداد البصمة ──
+async function _setupBiometric() {
+  const bioBtn = document.getElementById('setup-bio-btn');
+  if (bioBtn) bioBtn.textContent = 'جارٍ التسجيل...';
+  const ok = await _webAuthnSupported();
+  if (!ok) {
+    if (bioBtn) bioBtn.textContent = 'غير مدعوم — استخدم PIN';
+    return;
+  }
+  const result = await _webAuthnRegister();
+  if (result.ok) {
+    hideLockScreen();
+  } else if (result.unsupported) {
+    _renderLockSetup();
+    const bioBtn2 = document.getElementById('setup-bio-btn');
+    if (bioBtn2) { bioBtn2.style.opacity='.45'; bioBtn2.querySelector('div div:last-child').textContent='غير متاح على هذا الجهاز'; }
+  } else if (result.cancelled) {
+    _renderLockSetup();
+  } else {
+    // فشل التسجيل — اذهب لـ PIN تلقائياً
+    _setupPin();
+  }
+}
+
+// ── إعداد PIN ──
+function _setupPin() {
+  _pinSetupStep = 0;
+  _pinSetupFirst = '';
+  _pinBuffer = '';
+  _renderLockPin(true);
+}
+
+// ── تخطي الإعداد ──
+function _setupSkip() {
+  localStorage.setItem(LOCK_METHOD_KEY, 'none');
+  // أوقف إعداد القفل تماماً
+  saveSetting('biometric', false);
+  hideLockScreen();
+}
+
+// ── تبديل للـ PIN من واجهة البصمة ──
+function _switchToPinFallback() {
+  if (!localStorage.getItem(PIN_HASH_KEY)) {
+    // لا يوجد PIN محفوظ — إعداد جديد
+    localStorage.setItem(LOCK_METHOD_KEY, 'none');
+    _setupPin();
+  } else {
+    localStorage.setItem(LOCK_METHOD_KEY, 'pin');
+    _pinBuffer = '';
+    _renderLockPin(false);
+  }
+}
+
+// ── MAIN TRIGGER — البصمة ──
+async function triggerBiometric() {
+  const btn = document.getElementById('lock-btn');
+  if (!btn) return;
+  const msg = document.getElementById('lock-msg');
+  btn.classList.add('pulse');
+  _setLockMsg('جارٍ التحقق...');
+
+  const supported = await _webAuthnSupported();
+  if (!supported) {
+    btn.classList.remove('pulse');
+    // جهاز بدون بصمة — تحوّل للـ PIN تلقائياً
+    if (localStorage.getItem(PIN_HASH_KEY)) {
+      localStorage.setItem(LOCK_METHOD_KEY, 'pin');
+      _renderLockPin(false, 'البصمة غير متاحة — استخدم رمز PIN');
+    } else {
+      // لا بصمة ولا PIN — أعِد الإعداد
+      localStorage.removeItem(LOCK_METHOD_KEY);
+      _renderLockSetup();
+    }
+    return;
+  }
+
+  const credId = localStorage.getItem(CRED_KEY);
+  if (!credId) {
+    // لا credential مسجّل — أعِد التسجيل
+    btn.classList.remove('pulse');
+    _renderLockSetup();
+    return;
+  }
+
+  const result = await _webAuthnVerify();
+  btn.classList.remove('pulse');
+
+  if (result.ok) {
+    _setLockMsg('✓ مرحباً!', false, 'var(--success)');
+    setTimeout(hideLockScreen, 280);
+  } else if (result.needsRegister) {
+    localStorage.removeItem(CRED_KEY);
+    localStorage.removeItem(LOCK_METHOD_KEY);
+    _renderLockSetup();
+  } else if (result.unsupported) {
+    _switchToPinFallback();
+  } else if (result.cancelled) {
+    _setLockMsg('اضغط للمحاولة مجدداً');
+  } else {
+    _setLockMsg('فشل التحقق — اضغط مجدداً', true);
+  }
 }
 
 function hideLockScreen() {
   _appUnlocked = true;
   const ls = document.getElementById('lock-screen');
   ls.classList.remove('show');
-  ls.style.zIndex = '800'; // إعادة تعيين للاستخدام القادم
+  ls.style.zIndex = '800';
   document.getElementById('app').style.visibility = 'visible';
-
   if (_pendingModal) {
     _pendingModal = false;
     setTimeout(() => openModal(), 80);
   }
 }
 
-// ── Quick-add من شاشة القفل (المودال فقط، بدون كشف بيانات) ──
+// ── Quick-add من شاشة القفل ──
 function openModalFromLock() {
   const ls = document.getElementById('lock-screen');
-  if (ls) ls.style.zIndex = '500'; // المودال (600) يظهر فوق القفل
+  if (ls) ls.style.zIndex = '500';
   _pendingModal = false;
   openModal();
 }
 
-// ── Auto-lock عند الرجوع للخلفية ───────
+// ── Auto-lock عند الرجوع للخلفية ──
 let _lockTimer = null;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    // تأخير قصير لتجنب القفل عند تبديل التطبيقات السريع
-    _lockTimer = setTimeout(() => { _appUnlocked = false; }, 500);
+    _lockTimer = setTimeout(() => { _appUnlocked = false; }, 800);
   } else {
     clearTimeout(_lockTimer);
     if (currentUser && !_appUnlocked && getSetting('lockBg', false)) {
