@@ -113,7 +113,7 @@ html{font-size:16px}
 body{font-family:'Tajawal',sans-serif;background:var(--obsidian);color:var(--text-primary);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;-webkit-user-select:none;user-select:none;overscroll-behavior-y:none;-webkit-overflow-scrolling:touch}
 
 /* ── LOADER ── */
-#global-loader{position:fixed;inset:0;background:var(--obsidian);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem}
+#global-loader{position:fixed;inset:0;background:var(--obsidian);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;transition:opacity .2s}
 #global-loader .logo{font-family:'Playfair Display',serif;font-size:4rem;color:var(--gold)}
 #global-loader .sub{font-size:.75rem;color:var(--text-muted);letter-spacing:4px}
 .spinner{width:36px;height:36px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
@@ -1276,9 +1276,26 @@ async function loadApp(firebaseUser) {
 }
 
 // Firebase auth state — single source of truth
+// Hide loader as soon as possible — don't wait for Firebase
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _hideLoaderFast);
+} else {
+  _hideLoaderFast();
+}
+function _hideLoaderFast() {
+  const l = document.getElementById('global-loader');
+  if (l) { l.style.opacity = '0'; setTimeout(() => l.style.display='none', 200); }
+  // Show auth screen immediately if no cached session
+  const cachedEmail = localStorage.getItem('wafra_v2_session');
+  if (!cachedEmail) {
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+}
+
 window.addEventListener('firebaseReady', () => {
   const { auth, onAuthStateChanged } = F();
   onAuthStateChanged(auth, async user => {
+    // Loader already hidden — just handle auth state
     document.getElementById('global-loader').style.display = 'none';
     if (user) {
       await loadApp(user);
@@ -1329,8 +1346,8 @@ function saveSetting(k,v)    { const s=getSettings(); s[k]=v; localStorage.setIt
 function getSetting(k,def)   { const v=getSettings()[k]; return v===undefined?def:v; }
 
 function renderSettings() {
-  setToggle('biometric', getSetting('biometric', true));
-  setToggle('lockBg',    getSetting('lockBg',    true));
+  setToggle('biometric', getSetting('biometric', false));
+  setToggle('lockBg',    getSetting('lockBg',    false));
   setToggle('theme',     !document.body.classList.contains('light'));
   const cur = userProfile?.currency || 'SAR';
   const el  = document.getElementById('setting-currency');
@@ -1413,41 +1430,25 @@ function exportData(format = 'csv') {
 }
 
 function _exportCSV(headers, rows) {
-  const SEP = ',';   // standard comma — works universally
-
-  const esc = v => {
-    const s = String(v === null || v === undefined ? '' : v);
-    // Always quote every cell for maximum compatibility
-    return '"' + s.replace(/"/g, '""') + '"';
-  };
+  // Escape: wrap in quotes, double any internal quotes
+  const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
 
   const lines = [
-    headers.map(esc).join(SEP),
-    ...rows.map(r => r.map(esc).join(SEP))
+    headers.map(esc).join(','),
+    ...rows.map(r => r.map(esc).join(','))
   ];
-  const content = lines.join('\r\n');
+  const text = lines.join('\r\n');
 
-  // Build Blob with explicit UTF-8 BOM as raw bytes
-  // This is the ONLY reliable way — string concatenation corrupts non-ASCII in Blob
-  const bom   = [0xEF, 0xBB, 0xBF];
-  const bytes = [];
-  // Manually encode to UTF-8
-  for (let i = 0; i < content.length; ) {
-    const cp = content.codePointAt(i);
-    if (cp < 0x80) {
-      bytes.push(cp);
-    } else if (cp < 0x800) {
-      bytes.push(0xC0|(cp>>6), 0x80|(cp&0x3F));
-    } else if (cp < 0x10000) {
-      bytes.push(0xE0|(cp>>12), 0x80|((cp>>6)&0x3F), 0x80|(cp&0x3F));
-    } else {
-      bytes.push(0xF0|(cp>>18), 0x80|((cp>>12)&0x3F), 0x80|((cp>>6)&0x3F), 0x80|(cp&0x3F));
-      i++; // surrogate pair
-    }
-    i++;
-  }
-  const all = new Uint8Array([...bom, ...bytes]);
-  const blob = new Blob([all.buffer], { type: 'text/csv;charset=UTF-8' });
+  // Encode to UTF-8 bytes using TextEncoder, then prepend BOM
+  const enc     = new TextEncoder();          // always produces UTF-8
+  const body    = enc.encode(text);           // Uint8Array, UTF-8
+  const bom     = new Uint8Array([0xEF,0xBB,0xBF]);
+  const out     = new Uint8Array(bom.length + body.length);
+  out.set(bom);
+  out.set(body, bom.length);
+
+  // Pass the Uint8Array directly (NOT .buffer) so Blob gets exact bytes
+  const blob = new Blob([out], { type: 'text/csv' });
   _download(blob, `وفرة-${_today()}.csv`);
   showToast(`تم تصدير ${rows.length} معاملة ✓`, 'success');
 }
@@ -2274,7 +2275,7 @@ function _setLockError(text) {
   if (msg) { msg.textContent = text; msg.className = 'lock-msg error'; }
 }
 function showLockScreen(pendingModal) {
-  if (!getSetting('biometric', true)) {
+  if (!getSetting('biometric', false)) {
     _appUnlocked = true;
     if (pendingModal) setTimeout(() => openModal(), 80);
     return;
@@ -2327,7 +2328,7 @@ document.addEventListener('visibilitychange', () => {
     _lockTimer = setTimeout(() => { _appUnlocked = false; }, 500);
   } else {
     clearTimeout(_lockTimer);
-    if (currentUser && !_appUnlocked && getSetting('lockBg', true)) {
+    if (currentUser && !_appUnlocked && getSetting('lockBg', false)) {
       showLockScreen();
     }
   }
@@ -2343,7 +2344,7 @@ function handleUrlParams() {
   window.history.replaceState({}, '', './index.html');
   if (action === 'quick-add' || action === 'add') {
     // Open modal directly — works from lock screen too
-    if (!_appUnlocked && getSetting('biometric', true)) {
+    if (!_appUnlocked && getSetting('biometric', false)) {
       showLockScreen(true); // pendingModal=true → opens after unlock
     } else {
       setTimeout(() => openModal(type || null), 300);
