@@ -1276,44 +1276,78 @@ async function loadApp(firebaseUser) {
 }
 
 // Firebase auth state — single source of truth
-// ── Fast startup: hide loader, decide what to show before Firebase loads ──
+// ── Fast startup: check IndexedDB for Firebase session ──────────────────
+// Firebase Auth stores the session in IndexedDB: firebaseLocalStorageDb / firebaseLocalStorage
+// We read it BEFORE Firebase SDK loads to avoid flashing the login screen
+
+async function _checkCachedSession() {
+  // 1. Check localStorage first (older Firebase or some browsers)
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('firebase:authUser:')) return true;
+    }
+  } catch(e) {}
+
+  // 2. Check IndexedDB — Firebase v9+ stores here
+  return new Promise(resolve => {
+    try {
+      const req = indexedDB.open('firebaseLocalStorageDb');
+      req.onsuccess = e => {
+        try {
+          const db    = e.target.result;
+          const names = Array.from(db.objectStoreNames);
+          if (!names.length) { db.close(); resolve(false); return; }
+          const tx    = db.transaction(names[0], 'readonly');
+          const store = tx.objectStore(names[0]);
+          const all   = store.getAll();
+          all.onsuccess = () => {
+            db.close();
+            // Any record = logged-in user exists
+            resolve(all.result && all.result.length > 0);
+          };
+          all.onerror = () => { db.close(); resolve(false); };
+        } catch { resolve(false); }
+      };
+      req.onerror   = () => resolve(false);
+      req.onblocked = () => resolve(false);
+      // Timeout after 400ms — don't block startup
+      setTimeout(() => resolve(false), 400);
+    } catch { resolve(false); }
+  });
+}
+
+// Run immediately — parallel with Firebase SDK loading
+const _sessionPromise = _checkCachedSession();
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', _hideLoaderFast);
 } else {
   _hideLoaderFast();
 }
 
-function _hasFirebaseSession() {
-  // Firebase Auth stores session in localStorage with key like:
-  // "firebase:authUser:API_KEY:[DEFAULT]"
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      if (localStorage.key(i).startsWith('firebase:authUser:')) return true;
-    }
-  } catch(e) {}
-  return false;
-}
-
-function _hideLoaderFast() {
+async function _hideLoaderFast() {
   const loader = document.getElementById('global-loader');
-  const auth   = document.getElementById('auth-screen');
-  const app    = document.getElementById('app');
+  const authEl = document.getElementById('auth-screen');
+  const appEl  = document.getElementById('app');
 
+  // Fade out loader
   if (loader) {
-    loader.style.transition = 'opacity .15s';
+    loader.style.transition = 'opacity .12s';
     loader.style.opacity    = '0';
-    setTimeout(() => { if (loader) loader.style.display = 'none'; }, 160);
+    setTimeout(() => { if (loader) loader.style.display = 'none'; }, 130);
   }
 
-  if (_hasFirebaseSession()) {
-    // User was logged in — keep everything hidden until Firebase confirms
-    // Show a skeleton/blank so it doesn't flash auth screen
-    if (auth) auth.style.display = 'none';
-    if (app)  app.style.display  = 'none';
+  const hasSession = await _sessionPromise;
+
+  if (hasSession) {
+    // Known user — keep blank (no flash) until Firebase confirms
+    if (authEl) authEl.style.display = 'none';
+    if (appEl)  appEl.style.display  = 'none';
   } else {
-    // Definitely not logged in — show auth immediately
-    if (auth) auth.style.display = 'flex';
-    if (app)  app.style.display  = 'none';
+    // Not logged in — show auth immediately
+    if (authEl) authEl.style.display = 'flex';
+    if (appEl)  appEl.style.display  = 'none';
   }
 }
 
@@ -1321,25 +1355,20 @@ function _hideLoaderFast() {
 window.addEventListener('firebaseReady', () => {
   const { auth, onAuthStateChanged } = F();
 
-  // Timeout: if Firebase doesn't respond in 4s (offline first-load),
-  // check if we have a cached session and load from local data
-  let _authResolved = false;
-  const _offlineTimer = setTimeout(() => {
-    if (_authResolved) return;
-    _authResolved = true;
-    // Firebase offline — check if there's a known session
-    if (_hasFirebaseSession() && !currentUser) {
-      // Can't load Firebase user offline without auth resolving
-      // Show auth screen as safe fallback
+  // Safety net for pure offline: if onAuthStateChanged doesn't fire within 5s
+  // and we detected a cached session, something is wrong — show auth as fallback
+  let _resolved = false;
+  setTimeout(() => {
+    if (!_resolved && !currentUser) {
       const a = document.getElementById('auth-screen');
-      if (a) a.style.display = 'flex';
+      if (a && a.style.display === 'none') a.style.display = 'flex';
     }
-  }, 4000);
+  }, 5000);
 
   onAuthStateChanged(auth, async user => {
-    clearTimeout(_offlineTimer);
-    _authResolved = true;
-    document.getElementById('global-loader').style.display = 'none';
+    _resolved = true;
+    const loader = document.getElementById('global-loader');
+    if (loader) loader.style.display = 'none';
     if (user) {
       await loadApp(user);
     } else {
