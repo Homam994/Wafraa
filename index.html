@@ -1276,33 +1276,76 @@ async function loadApp(firebaseUser) {
 }
 
 // Firebase auth state — single source of truth
-// Hide loader as soon as possible — don't wait for Firebase
+// ── Fast startup: hide loader, decide what to show before Firebase loads ──
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', _hideLoaderFast);
 } else {
   _hideLoaderFast();
 }
+
+function _hasFirebaseSession() {
+  // Firebase Auth stores session in localStorage with key like:
+  // "firebase:authUser:API_KEY:[DEFAULT]"
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (localStorage.key(i).startsWith('firebase:authUser:')) return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
 function _hideLoaderFast() {
-  const l = document.getElementById('global-loader');
-  if (l) { l.style.opacity = '0'; setTimeout(() => l.style.display='none', 200); }
-  // Show auth screen immediately if no cached session
-  const cachedEmail = localStorage.getItem('wafra_v2_session');
-  if (!cachedEmail) {
-    document.getElementById('auth-screen').style.display = 'flex';
+  const loader = document.getElementById('global-loader');
+  const auth   = document.getElementById('auth-screen');
+  const app    = document.getElementById('app');
+
+  if (loader) {
+    loader.style.transition = 'opacity .15s';
+    loader.style.opacity    = '0';
+    setTimeout(() => { if (loader) loader.style.display = 'none'; }, 160);
+  }
+
+  if (_hasFirebaseSession()) {
+    // User was logged in — keep everything hidden until Firebase confirms
+    // Show a skeleton/blank so it doesn't flash auth screen
+    if (auth) auth.style.display = 'none';
+    if (app)  app.style.display  = 'none';
+  } else {
+    // Definitely not logged in — show auth immediately
+    if (auth) auth.style.display = 'flex';
+    if (app)  app.style.display  = 'none';
   }
 }
 
+// ── Firebase ready: handle auth state ──
 window.addEventListener('firebaseReady', () => {
   const { auth, onAuthStateChanged } = F();
+
+  // Timeout: if Firebase doesn't respond in 4s (offline first-load),
+  // check if we have a cached session and load from local data
+  let _authResolved = false;
+  const _offlineTimer = setTimeout(() => {
+    if (_authResolved) return;
+    _authResolved = true;
+    // Firebase offline — check if there's a known session
+    if (_hasFirebaseSession() && !currentUser) {
+      // Can't load Firebase user offline without auth resolving
+      // Show auth screen as safe fallback
+      const a = document.getElementById('auth-screen');
+      if (a) a.style.display = 'flex';
+    }
+  }, 4000);
+
   onAuthStateChanged(auth, async user => {
-    // Loader already hidden — just handle auth state
+    clearTimeout(_offlineTimer);
+    _authResolved = true;
     document.getElementById('global-loader').style.display = 'none';
     if (user) {
       await loadApp(user);
     } else {
       if (_unsubTx) { _unsubTx(); _unsubTx = null; }
       currentUser = null; userProfile = null; transactions = [];
-      document.getElementById('app').style.display = 'none';
+      document.getElementById('app').style.display  = 'none';
       document.getElementById('auth-screen').style.display = 'flex';
     }
   });
