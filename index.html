@@ -24,11 +24,11 @@ import { getAuth, createUserWithEmailAndPassword,
          signInWithEmailAndPassword, signOut,
          onAuthStateChanged, updateProfile,
          sendPasswordResetEmail }                           from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc,
+import { initializeFirestore, doc, setDoc, getDoc,
          collection, addDoc, deleteDoc,
          query, orderBy, onSnapshot,
-         enableIndexedDbPersistence,
-         enableMultiTabIndexedDbPersistence }               from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+         persistentLocalCache,
+         persistentMultipleTabManager }                     from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey:            "AIzaSyAHzsmMrn8sHz6bO_EY3BokcxYTlqzHfRg",
@@ -41,19 +41,30 @@ const firebaseConfig = {
 
 const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db   = getFirestore(app);
 
-// ── Offline Persistence (IndexedDB) ──────────────────────────────────────
-// يخزّن كل البيانات محلياً — يعمل بدون إنترنت ويزامن عند الاتصال
-enableIndexedDbPersistence(db).catch(err => {
-  if (err.code === 'failed-precondition') {
-    // Multiple tabs open — use multi-tab persistence
-    enableMultiTabIndexedDbPersistence(db).catch(() => {});
-  } else if (err.code === 'unimplemented') {
-    // Browser doesn't support IndexedDB — silent fail, online-only
-    console.warn('Offline persistence not supported in this browser.');
+// ── Offline Persistence (IndexedDB) — Firebase v11 API ───────────────────
+// persistentLocalCache يستبدل enableIndexedDbPersistence المهمل
+// يعمل في تبويبات متعددة تلقائياً بدون إعداد إضافي
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (e) {
+  // fallback: بعض البيئات لا تدعم persistentMultipleTabManager
+  try {
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache()
+    });
+  } catch (e2) {
+    // آخر fallback: بدون offline persistence
+    const { getFirestore } = await import("https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js");
+    db = getFirestore(app);
+    console.warn('[Wafra] Offline persistence not available:', e2.message);
   }
-});
+}
 
 window._fire = { auth, db,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -810,7 +821,15 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
               <div class="toggle" id="tog-lockBg"></div>
             </div>
           </div>
-          <!-- removed: إعادة تسجيل البصمة -->
+          <div class="setting-row" id="sr-biometric-reset" style="display:none">
+            <div class="setting-info">
+              <div class="setting-label">إعادة تعيين بيانات البصمة</div>
+              <div class="setting-desc">امسح بيانات التسجيل الحيوي — سيُطلب تسجيل جديد عند الفتح القادم</div>
+            </div>
+            <button class="setting-install-btn" onclick="resetBiometricCred()" style="background:var(--obsidian-3);border:1px solid var(--border);color:var(--text-secondary)">
+              إعادة تعيين
+            </button>
+          </div>
         </div>
 
         <!-- Display -->
@@ -1108,14 +1127,21 @@ async function fbGetProfile(uid) {
 }
 
 function fbListenTx(uid) {
-  if (_unsubTx) _unsubTx();
+  // إلغاء أي اشتراك سابق أولاً — يمنع تراكم المستمعين عند إعادة الدخول
+  if (_unsubTx) {
+    try { _unsubTx(); } catch(e) {}
+    _unsubTx = null;
+  }
   const { db, collection, query, orderBy, onSnapshot } = F();
   const q = query(collection(db, 'users', uid, 'transactions'), orderBy('date', 'desc'));
   _unsubTx = onSnapshot(q, snap => {
     transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const pg = document.querySelector('.page.active');
     if (pg) { try { renderPage(pg.id.replace('page-','')); } catch(e){} }
-  }, err => { console.error('Firestore error:', err); });
+  }, err => {
+    // خطأ الاتصال — لا نعرض رسالة خطأ (Firestore يعمل offline تلقائياً)
+    if (err.code !== 'unavailable') console.error('Firestore listener error:', err);
+  });
 }
 
 async function fbAddTx(uid, tx) {
@@ -1236,6 +1262,18 @@ function authErrMsg(code) {
 
 async function doLogout() {
   if (_unsubTx) { _unsubTx(); _unsubTx = null; }
+  // ── إعادة تعيين كامل لحالة التطبيق ──
+  currentUser  = null;
+  userProfile  = null;
+  transactions = [];
+  // إعادة تعيين حالة التقارير (كانت تحتفظ بالشهر بعد الخروج)
+  reportYear   = undefined;
+  reportMonth  = undefined;
+  // إعادة تعيين cache دعم المصادقة البيومترية
+  _platformAuthSupported = null;
+  // إعادة تعيين حالة القفل
+  _appUnlocked  = false;
+  _pendingModal = false;
   const { auth, signOut } = F();
   await signOut(auth);
   // onAuthStateChanged handles UI reset
@@ -1253,7 +1291,6 @@ async function loadApp(firebaseUser) {
   currentUser = firebaseUser;
   userProfile = await fbGetProfile(firebaseUser.uid);
   if (!userProfile) {
-    // First login via Google or edge case — create profile
     userProfile = { name: firebaseUser.displayName || firebaseUser.email.split('@')[0], currency: 'SAR' };
     await fbSaveProfile(firebaseUser.uid, userProfile);
   }
@@ -1267,6 +1304,9 @@ async function loadApp(firebaseUser) {
   document.getElementById('tx-currency-label').textContent = userProfile.currency || 'SAR';
   document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
   try { document.getElementById('dash-date').textContent = new Intl.DateTimeFormat('ar-SA',{weekday:'long',year:'numeric',month:'long',day:'numeric'}).format(new Date()); } catch(e){}
+
+  // ⚡ تحميل cache دعم المصادقة مبكراً — يُزيل التأخير عند أول فتح للقفل
+  deviceLockSupported().catch(() => {});
 
   fbListenTx(firebaseUser.uid);
   initNetworkMonitor();
@@ -1311,8 +1351,8 @@ async function _checkCachedSession() {
       };
       req.onerror   = () => resolve(false);
       req.onblocked = () => resolve(false);
-      // Timeout after 400ms — don't block startup
-      setTimeout(() => resolve(false), 400);
+      // Timeout after 1200ms — don't block startup (رُفع من 400ms لتجنب false negative على الأجهزة البطيئة)
+      setTimeout(() => resolve(false), 1200);
     } catch { resolve(false); }
   });
 }
@@ -1372,9 +1412,12 @@ window.addEventListener('firebaseReady', () => {
     if (user) {
       await loadApp(user);
     } else {
+      // تنظيف أي اشتراك متبقٍّ
       if (_unsubTx) { _unsubTx(); _unsubTx = null; }
       currentUser = null; userProfile = null; transactions = [];
-      document.getElementById('app').style.display  = 'none';
+      document.getElementById('app').style.display         = 'none';
+      document.getElementById('app').style.visibility     = 'visible'; // إعادة تعيين visibility عند الخروج
+      document.getElementById('lock-screen').classList.remove('show'); // إخفاء شاشة القفل
       document.getElementById('auth-screen').style.display = 'flex';
     }
   });
@@ -1429,6 +1472,9 @@ function renderSettings() {
   const syncEl = document.getElementById('sync-status-label');
   if (syncEl) syncEl.textContent = navigator.onLine
     ? 'Firebase Firestore — متصل ومزامَن' : 'Firebase Firestore — غير متصل (بيانات محلية)';
+  // إظهار/إخفاء زر إعادة تعيين البصمة بناءً على وجود credential مسجّل
+  const resetRow = document.getElementById('sr-biometric-reset');
+  if (resetRow) resetRow.style.display = localStorage.getItem(CRED_KEY) ? '' : 'none';
   _updateShortcutRow();
 }
 
@@ -1450,6 +1496,8 @@ function toggleSetting(key) {
 
 function resetBiometricCred() {
   localStorage.removeItem(CRED_KEY);
+  const resetRow = document.getElementById('sr-biometric-reset');
+  if (resetRow) resetRow.style.display = 'none';
   showToast('🔑 سيُطلب تسجيل البصمة عند الفتح القادم', 'success');
 }
 
@@ -1666,16 +1714,21 @@ function openEditModal(id) {
   document.getElementById('modal-overlay').classList.add('open');
 }
 
+function handleOverlayClick(e) { if (e.target === e.currentTarget) closeModal(); }
+
+// ── closeModal — موضع صحيح، يُصلح z-index القفل عند الإغلاق ──
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   _closeCatSheet();
   editingTxId = null;
-  // Always re-enable save button for next open
   const btn = document.getElementById('btn-save');
   if (btn) { btn.disabled = false; btn.textContent = '💾 حفظ'; }
+  // إعادة z-index شاشة القفل إن كانت مفعّلة
+  const ls = document.getElementById('lock-screen');
+  if (ls && ls.classList.contains('show')) {
+    ls.style.zIndex = '800';
+  }
 }
-
-function handleOverlayClick(e) { if (e.target === e.currentTarget) closeModal(); }
 
 function _resetQuickForm() {
   document.getElementById('tx-amount').value = '';
@@ -1846,11 +1899,7 @@ async function saveTransaction() {
 function _afterSave(isEdit, toastMsg) {
   if (!isEdit) saveLastUsed({ type: txType, [txType+'Cat']: txMainCat, [txType+'Sub']: txSubCat });
   showToast(toastMsg || (isEdit ? '✓ تم التعديل' : '✓ تم الحفظ'), 'success');
-  closeModal();
-  if (!_appUnlocked) {
-    const ls = document.getElementById('lock-screen');
-    if (ls) ls.style.zIndex = '800';
-  }
+  closeModal(); // closeModal تتولى z-index القفل تلقائياً
 }
 
 // ── Confirm Delete ──
@@ -2185,20 +2234,30 @@ function applyTheme(mode) {
 const CRED_KEY   = 'wafra_cred_id';
 let _appUnlocked = false;
 let _pendingModal = false;
+// ⚡ Cache نتيجة دعم المصادقة — تُحسب مرة واحدة فقط لتجنب التأخير
+let _platformAuthSupported = null;
 
-// ── Check if platform authenticator available ──
+// ── فحص دعم المصادقة — مع cache ──
 async function deviceLockSupported() {
-  if (!window.PublicKeyCredential) return false;
+  if (_platformAuthSupported !== null) return _platformAuthSupported;
+  if (!window.PublicKeyCredential) {
+    _platformAuthSupported = false;
+    return false;
+  }
   try {
-    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-  } catch { return false; }
+    _platformAuthSupported =
+      await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    _platformAuthSupported = false;
+  }
+  return _platformAuthSupported;
 }
 
-// ── REGISTER once (stores credential id for future verify) ──
+// ── تسجيل أول مرة ──
 async function deviceLockRegister() {
   try {
     const hostname = location.hostname || 'localhost';
-    const uid = currentUser?.uid || 'wafra';
+    const uid      = currentUser?.uid || 'wafra';
     const challenge = crypto.getRandomValues(new Uint8Array(32));
 
     const cred = await navigator.credentials.create({
@@ -2219,12 +2278,11 @@ async function deviceLockRegister() {
           userVerification:        'required',
           residentKey:             'preferred'
         },
-        timeout: 120000
+        timeout: 60000 // تقليل من 120s → 60s
       }
     });
 
     if (cred?.rawId) {
-      // Store credential id as base64url
       const raw = new Uint8Array(cred.rawId);
       const b64 = btoa(String.fromCharCode(...raw))
                     .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
@@ -2234,48 +2292,49 @@ async function deviceLockRegister() {
     return { ok: false };
   } catch(e) {
     console.warn('register:', e.name, e.message);
-    if (e.name === 'NotAllowedError') return { ok: false, cancelled: true };
+    if (e.name === 'NotAllowedError')   return { ok: false, cancelled: true };
     if (e.name === 'NotSupportedError') return { ok: false, unsupported: true };
     return { ok: false, error: e };
   }
 }
 
-// ── VERIFY using stored credential ──
+// ── التحقق — مُحسَّن لتجنب التأخير ──
 async function deviceLockVerify() {
   try {
     const hostname  = location.hostname || 'localhost';
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const credId    = localStorage.getItem(CRED_KEY);
 
-    const getOptions = {
+    // ⚡ المفتاح: دائماً مرر allowCredentials إن كان credId موجوداً
+    // هذا يمنع المتصفح من البحث الشبكي عن resident keys ويُزيل التأخير
+    const allowCredentials = credId ? [{
+      type: 'public-key',
+      id: Uint8Array.from(
+        atob(credId.replace(/-/g,'+').replace(/_/g,'/')
+               .padEnd(credId.length + (4 - credId.length % 4) % 4, '=')),
+        c => c.charCodeAt(0)
+      ),
+      transports: ['internal']
+    }] : [];
+
+    const assertion = await navigator.credentials.get({
       publicKey: {
         challenge,
-        rpId:            hostname,
+        rpId:             hostname,
         userVerification: 'required',
-        timeout:          120000,
-        // Pass stored credential so device knows which key to use
-        // Empty array = let device pick (works on most platforms)
-        allowCredentials: credId ? [{
-          type:       'public-key',
-          id:          Uint8Array.from(atob(
-                         credId.replace(/-/g,'+').replace(/_/g,'/')
-                               .padEnd(credId.length + (4 - credId.length%4)%4,'=')
-                       ), c => c.charCodeAt(0)),
-          transports: ['internal']
-        }] : []
+        timeout:          60000, // تقليل من 120s → 60s
+        allowCredentials  // دائماً محدد
       }
-    };
+    });
 
-    const assertion = await navigator.credentials.get(getOptions);
-    if (assertion) return { ok: true };
-    return { ok: false };
+    return assertion ? { ok: true } : { ok: false };
   } catch(e) {
     console.warn('verify:', e.name, e.message);
-    if (e.name === 'NotAllowedError')  return { ok: false, cancelled: true };
+    if (e.name === 'NotAllowedError')   return { ok: false, cancelled: true };
     if (e.name === 'InvalidStateError' ||
         e.name === 'NotSupportedError') return { ok: false, unsupported: true };
-    // If no credential found → need to register first
-    if (e.name === 'AbortError')       return { ok: false, cancelled: true };
+    if (e.name === 'AbortError')        return { ok: false, cancelled: true };
+    // credential غير موجود في الجهاز — إعادة تسجيل
     return { ok: false, needsRegister: true };
   }
 }
@@ -2288,57 +2347,56 @@ async function triggerBiometric() {
   msg.className   = 'lock-msg';
   msg.textContent = 'جارٍ التحقق...';
 
+  // استخدام الـ cache — لا استدعاء async بطيء في كل مرة
   const supported = await deviceLockSupported();
   if (!supported) {
-    // Device has no platform authenticator — skip lock
     btn.classList.remove('pulse');
     msg.textContent = 'التحقق غير متاح على هذا الجهاز';
     msg.className   = 'lock-msg';
-    setTimeout(hideLockScreen, 1500);
+    setTimeout(hideLockScreen, 1200);
     return;
   }
 
   const credId = localStorage.getItem(CRED_KEY);
 
   if (!credId) {
-    // First time — register
+    // أول مرة — تسجيل
     msg.textContent = 'سجّل طريقة قفل شاشتك للمرة الأولى...';
     const result = await deviceLockRegister();
     btn.classList.remove('pulse');
     if (result.ok) {
-      msg.textContent = '✓ تم التسجيل';
+      msg.textContent = '✓ تم التسجيل بنجاح';
       msg.style.color = 'var(--success)';
-      setTimeout(hideLockScreen, 600);
-    } else if (result.unsupported) {
       setTimeout(hideLockScreen, 500);
+    } else if (result.unsupported) {
+      setTimeout(hideLockScreen, 400);
     } else if (result.cancelled) {
-      _setLockError('تم الإلغاء. اضغط مجدداً للمحاولة.');
+      _setLockError('تم الإلغاء — اضغط مجدداً للمحاولة');
     } else {
-      _setLockError('فشل التسجيل. تأكد أن لديك قفل شاشة مفعّل.');
+      _setLockError('فعّل قفل الشاشة في إعدادات جهازك أولاً');
     }
     return;
   }
 
-  // Verify
+  // تحقق مباشر بدون تأخير
   const result = await deviceLockVerify();
   btn.classList.remove('pulse');
 
   if (result.ok) {
     msg.textContent = '✓ مرحباً!';
     msg.style.color = 'var(--success)';
-    setTimeout(hideLockScreen, 350);
+    setTimeout(hideLockScreen, 300);
   } else if (result.needsRegister) {
-    // Credential was deleted from device — re-register
+    // credential حُذف من الجهاز — إعادة تسجيل تلقائية
     localStorage.removeItem(CRED_KEY);
-    msg.textContent = 'يلزم إعادة التسجيل. اضغط مجدداً.';
+    msg.textContent = 'يلزم إعادة التسجيل — اضغط مجدداً';
     msg.className   = 'lock-msg';
-    btn.classList.remove('pulse');
   } else if (result.unsupported) {
-    setTimeout(hideLockScreen, 500);
+    setTimeout(hideLockScreen, 400);
   } else if (result.cancelled) {
-    _setLockError('تم الإلغاء. اضغط مجدداً.');
+    _setLockError('تم الإلغاء — اضغط مجدداً');
   } else {
-    _setLockError('فشل التحقق. اضغط مجدداً.');
+    _setLockError('فشل التحقق — اضغط مجدداً');
   }
 }
 
@@ -2346,6 +2404,7 @@ function _setLockError(text) {
   const msg = document.getElementById('lock-msg');
   if (msg) { msg.textContent = text; msg.className = 'lock-msg error'; }
 }
+
 function showLockScreen(pendingModal) {
   if (!getSetting('biometric', false)) {
     _appUnlocked = true;
@@ -2355,16 +2414,20 @@ function showLockScreen(pendingModal) {
   _appUnlocked  = false;
   _pendingModal = pendingModal || false;
   document.getElementById('app').style.visibility = 'hidden';
-  document.getElementById('lock-screen').classList.add('show');
+  const ls = document.getElementById('lock-screen');
+  ls.style.zIndex = '800'; // تأكيد z-index الصحيح عند كل فتح
+  ls.classList.add('show');
   const msg = document.getElementById('lock-msg');
   msg.textContent = 'اضغط على القفل لفتح التطبيق، أو أضف معاملة مباشرة';
   msg.className   = 'lock-msg';
-  // لا يبدأ التحقق تلقائياً — المستخدم يختار
+  msg.style.color = ''; // إعادة تعيين اللون (قد يكون بقي أخضر من مرة سابقة)
 }
 
 function hideLockScreen() {
   _appUnlocked = true;
-  document.getElementById('lock-screen').classList.remove('show');
+  const ls = document.getElementById('lock-screen');
+  ls.classList.remove('show');
+  ls.style.zIndex = '800'; // إعادة تعيين للاستخدام القادم
   document.getElementById('app').style.visibility = 'visible';
 
   if (_pendingModal) {
@@ -2373,30 +2436,19 @@ function hideLockScreen() {
   }
 }
 
-// ── Quick-add from lock (modal only, no data) ──
+// ── Quick-add من شاشة القفل (المودال فقط، بدون كشف بيانات) ──
 function openModalFromLock() {
-  // Show modal WITHOUT unlocking — المودال لا يعرض بيانات حساسة
-  document.getElementById('lock-screen').style.zIndex = '500'; // modal (600) above lock
+  const ls = document.getElementById('lock-screen');
+  if (ls) ls.style.zIndex = '500'; // المودال (600) يظهر فوق القفل
   _pendingModal = false;
   openModal();
-  // After modal closes, re-raise lock z-index
-  const orig = document.getElementById('modal-overlay').addEventListener;
 }
 
-// After saving from lock screen, restore lock z-index
-const _origCloseModal = closeModal;
-closeModal = function() {
-  _origCloseModal();
-  const ls = document.getElementById('lock-screen');
-  if (ls.classList.contains('show')) {
-    ls.style.zIndex = '800';
-  }
-};
-
-// ── Auto-lock on visibility change ───────
+// ── Auto-lock عند الرجوع للخلفية ───────
 let _lockTimer = null;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    // تأخير قصير لتجنب القفل عند تبديل التطبيقات السريع
     _lockTimer = setTimeout(() => { _appUnlocked = false; }, 500);
   } else {
     clearTimeout(_lockTimer);
