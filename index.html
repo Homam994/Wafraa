@@ -895,18 +895,9 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
           <div class="setting-row" style="cursor:pointer" onclick="exportData('csv')">
             <div class="setting-info">
               <div class="setting-label">تصدير CSV</div>
-              <div class="setting-desc">ملف يفتح في Excel أو Google Sheets</div>
+              <div class="setting-desc">ملف يفتح في Excel أو Google Sheets بأعمدة منفصلة</div>
             </div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18" style="color:var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          </div>
-
-          <!-- Export Excel -->
-          <div class="setting-row" style="cursor:pointer" onclick="exportData('excel')">
-            <div class="setting-info">
-              <div class="setting-label">تصدير Excel (XLSX)</div>
-              <div class="setting-desc">جدول بيانات كامل مع التنسيق</div>
-            </div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18" style="color:var(--success)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </div>
         </div>
 
@@ -1581,286 +1572,34 @@ function exportData(format = 'csv') {
   if (!transactions.length) { showToast('لا توجد بيانات للتصدير', 'error'); return; }
   const headers = ['التاريخ','النوع','التصنيف','التصنيف الفرعي','المبلغ','العملة','ملاحظة','تاريخ الإدخال'];
   const rows    = transactions.map(txToRow);
-  if (format === 'csv') _exportCSV(headers, rows);
-  else                  _exportXLSX(headers, rows);
+  _exportCSV(headers, rows);
 }
 
 // ── CSV: فاصلة منقوطة `;` — تُفتح بأعمدة منفصلة في Excel العربي تلقائياً ──
 function _exportCSV(headers, rows) {
-  // sep=; يُخبر Excel صراحةً باستخدام الفاصلة المنقوطة
   const SEP = ';';
+
+  // escape: لا نلفّ بالتنصيص إلا عند الحاجة الفعلية
   const esc = v => {
     const s = String(v ?? '');
-    // نلفّ بعلامات تنصيص فقط إن احتاج (يحتوي فاصلة منقوطة أو علامة تنصيص أو سطر جديد)
-    return (s.includes(SEP) || s.includes('"') || s.includes('\n'))
+    return (s.includes(SEP) || s.includes('"') || s.includes('\n') || s.includes('\r'))
       ? '"' + s.replace(/"/g, '""') + '"'
       : s;
   };
 
+  // sep=; يجب أن يكون أول سطر بعد BOM مباشرة
   const lines = [
-    'sep=;',                              // توجيه Excel لاستخدام `;`
+    'sep=;',
     headers.map(esc).join(SEP),
     ...rows.map(r => r.map(esc).join(SEP))
-  ];
-  const text = lines.join('\r\n');
+  ].join('\r\n');
 
-  const enc = new TextEncoder();
-  const bom = new Uint8Array([0xEF,0xBB,0xBF]);  // UTF-8 BOM للعربية
-  const body = enc.encode(text);
-  const out  = new Uint8Array(bom.length + body.length);
-  out.set(bom); out.set(body, bom.length);
+  // BOM كـ string مدمج مع النص — يضمن أن Blob يرى كل شيء كـ UTF-8 واحد
+  const BOM  = '\uFEFF';
+  const blob = new Blob([BOM + lines], { type: 'text/csv;charset=utf-8' });
 
-  _download(new Blob([out], { type: 'text/csv;charset=utf-8' }), `وفرة-${_today()}.csv`);
+  _download(blob, `وفرة-${_today()}.csv`);
   showToast(`تم تصدير ${rows.length} معاملة ✓`, 'success');
-}
-
-// ── XLSX حقيقي — مبني يدوياً بدون مكتبات خارجية ──
-// يستخدم Office Open XML بصيغة ZIP مبسّطة (بدون ضغط — Stored)
-function _exportXLSX(headers, rows) {
-  // ── 1. بناء محتوى الـ sheet بصيغة XML ──
-  const allRows  = [headers, ...rows];
-  const colCount = headers.length;
-
-  // خريطة النصوص المشتركة (Shared Strings) لتصغير الحجم
-  const sst   = [];  // shared strings array
-  const sstMap = {}; // string → index
-  function si(v) {   // الحصول على index النص
-    const s = String(v ?? '');
-    if (sstMap[s] === undefined) { sstMap[s] = sst.length; sst.push(s); }
-    return sstMap[s];
-  }
-
-  // بناء صفوف الـ sheet
-  const sheetRows = allRows.map((row, ri) => {
-    const cells = row.map((v, ci) => {
-      const col  = String.fromCharCode(65 + ci); // A, B, C…
-      const ref  = col + (ri + 1);
-      if (ri === 0) {
-        // الهيدر — نص عريض (style=1)
-        return `<c r="${ref}" t="s" s="1"><v>${si(v)}</v></c>`;
-      }
-      if (typeof v === 'number' && ci === 4) {
-        // عمود المبلغ — رقم (style=2 للمحاذاة)
-        return `<c r="${ref}" s="2"><v>${v}</v></c>`;
-      }
-      return `<c r="${ref}" t="s"><v>${si(v)}</v></c>`;
-    });
-    return `<row r="${ri+1}">${cells.join('')}</row>`;
-  });
-
-  // حساب نطاق الجدول
-  const lastCol = String.fromCharCode(65 + colCount - 1);
-  const lastRow = allRows.length;
-  const dimRef  = `A1:${lastCol}${lastRow}`;
-
-  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetViews><sheetView workbookViewId="0" rightToLeft="1"/></sheetViews>
-  <sheetFormatPr defaultRowHeight="16"/>
-  <cols>${headers.map((_,i)=>`<col min="${i+1}" max="${i+1}" width="${i===4?12:i===0||i===7?16:18}" customWidth="1"/>`).join('')}</cols>
-  <sheetData>${sheetRows.join('')}</sheetData>
-  <tableParts count="1"><tablePart r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/></tableParts>
-</worksheet>`;
-
-  // ── 2. Shared Strings XML ──
-  const sstXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">
-${sst.map(s => `<si><t xml:space="preserve">${_xmlEsc(s)}</t></si>`).join('')}
-</sst>`;
-
-  // ── 3. Styles XML — هيدر عريض + محاذاة أرقام ──
-  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="2">
-    <font><sz val="11"/><name val="Calibri"/></font>
-    <font><b/><sz val="11"/><name val="Calibri"/></font>
-  </fonts>
-  <fills count="3">
-    <fill><patternFill patternType="none"/></fill>
-    <fill><patternFill patternType="gray125"/></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FF1A3D2E"/></patternFill></fill>
-  </fills>
-  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
-  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="3">
-    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0"><alignment horizontal="right"/></xf>
-  </cellXfs>
-</styleSheet>`;
-
-  // ── 4. Table XML (لتفعيل التصفية التلقائية) ──
-  const tableXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-  id="1" name="وفرة" displayName="وفرة" ref="${dimRef}" totalsRowShown="0">
-  <autoFilter ref="${dimRef}"/>
-  <tableColumns count="${colCount}">
-    ${headers.map((h,i)=>`<tableColumn id="${i+1}" name="${_xmlEsc(h)}"/>`).join('')}
-  </tableColumns>
-  <tableStyleInfo name="TableStyleMedium9" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>
-</table>`;
-
-  // ── 5. ملفات البنية الثابتة ──
-  const wbXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="وفرة" sheetId="1" r:id="rId1"/></sheets>
-</workbook>`;
-
-  const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
-  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`;
-
-  const sheetRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="../tables/table1.xml"/>
-</Relationships>`;
-
-  const appRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>`;
-
-  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml"  ContentType="application/xml"/>
-  <Override PartName="/xl/workbook.xml"            ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml"   ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/sharedStrings.xml"       ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
-  <Override PartName="/xl/styles.xml"              ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-  <Override PartName="/xl/tables/table1.xml"       ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>
-</Types>`;
-
-  // ── 6. تجميع الـ ZIP ──
-  const files = {
-    '[Content_Types].xml':              contentTypes,
-    '_rels/.rels':                      appRels,
-    'xl/workbook.xml':                  wbXml,
-    'xl/_rels/workbook.xml.rels':       wbRels,
-    'xl/worksheets/sheet1.xml':         sheetXml,
-    'xl/worksheets/_rels/sheet1.xml.rels': sheetRels,
-    'xl/sharedStrings.xml':             sstXml,
-    'xl/styles.xml':                    stylesXml,
-    'xl/tables/table1.xml':             tableXml,
-  };
-
-  const zipBytes = _buildZip(files);
-  _download(
-    new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    `وفرة-${_today()}.xlsx`
-  );
-  showToast(`تم تصدير ${rows.length} معاملة كـ Excel ✓`, 'success');
-}
-
-// ── XML escape ──
-function _xmlEsc(s) {
-  return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── بناء ZIP بصيغة Stored (بدون ضغط) — يعمل في كل المتصفحات بدون مكتبات ──
-function _buildZip(files) {
-  const enc       = new TextEncoder();
-  const entries   = [];
-  let   offset    = 0;
-  const centralDir = [];
-
-  for (const [name, content] of Object.entries(files)) {
-    const nameBytes = enc.encode(name);
-    const dataBytes = enc.encode(content);
-    const crc       = _crc32(dataBytes);
-    const size      = dataBytes.length;
-
-    // Local file header
-    const lfh = new Uint8Array(30 + nameBytes.length);
-    const lfhView = new DataView(lfh.buffer);
-    lfhView.setUint32(0,  0x04034b50, true); // signature
-    lfhView.setUint16(4,  20,         true); // version needed
-    lfhView.setUint16(6,  0x0800,     true); // flags: UTF-8
-    lfhView.setUint16(8,  0,          true); // method: stored
-    lfhView.setUint16(10, 0,          true); // mod time
-    lfhView.setUint16(12, 0,          true); // mod date
-    lfhView.setUint32(14, crc,        true);
-    lfhView.setUint32(18, size,       true); // compressed
-    lfhView.setUint32(22, size,       true); // uncompressed
-    lfhView.setUint16(26, nameBytes.length, true);
-    lfhView.setUint16(28, 0,          true); // extra length
-    lfh.set(nameBytes, 30);
-
-    entries.push(lfh, dataBytes);
-
-    // Central directory entry
-    const cde = new Uint8Array(46 + nameBytes.length);
-    const cdeView = new DataView(cde.buffer);
-    cdeView.setUint32(0,  0x02014b50, true);
-    cdeView.setUint16(4,  20,         true);
-    cdeView.setUint16(6,  20,         true);
-    cdeView.setUint16(8,  0x0800,     true);
-    cdeView.setUint16(10, 0,          true);
-    cdeView.setUint16(12, 0,          true);
-    cdeView.setUint32(14, crc,        true);
-    cdeView.setUint32(18, size,       true);
-    cdeView.setUint32(22, size,       true);
-    cdeView.setUint16(26, nameBytes.length, true);
-    cdeView.setUint16(28, 0,          true);
-    cdeView.setUint16(30, 0,          true);
-    cdeView.setUint16(32, 0,          true);
-    cdeView.setUint16(34, 0,          true);
-    cdeView.setUint32(38, 0,          true);
-    cdeView.setUint32(42, offset,     true);
-    cde.set(nameBytes, 46);
-    centralDir.push(cde);
-
-    offset += lfh.length + size;
-  }
-
-  const cdBytes  = _concat(centralDir);
-  const cdOffset = offset;
-  const cdSize   = cdBytes.length;
-
-  // End of central directory
-  const eocd = new Uint8Array(22);
-  const eocdView = new DataView(eocd.buffer);
-  eocdView.setUint32(0,  0x06054b50,           true);
-  eocdView.setUint16(4,  0,                    true);
-  eocdView.setUint16(6,  0,                    true);
-  eocdView.setUint16(8,  entries.length / 2,   true); // عدد الملفات
-  eocdView.setUint16(10, entries.length / 2,   true);
-  eocdView.setUint32(12, cdSize,               true);
-  eocdView.setUint32(16, cdOffset,             true);
-  eocdView.setUint16(20, 0,                    true);
-
-  return _concat([...entries, cdBytes, eocd]);
-}
-
-function _concat(arrays) {
-  const total = arrays.reduce((s, a) => s + a.length, 0);
-  const out   = new Uint8Array(total);
-  let   pos   = 0;
-  for (const a of arrays) { out.set(a, pos); pos += a.length; }
-  return out;
-}
-
-// ── CRC-32 ──
-const _crcTable = (() => {
-  const t = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[i] = c;
-  }
-  return t;
-})();
-
-function _crc32(bytes) {
-  let c = 0xFFFFFFFF;
-  for (let i = 0; i < bytes.length; i++) c = _crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
 }
 
 function _today() { return new Date().toISOString().split('T')[0]; }
