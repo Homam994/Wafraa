@@ -1308,11 +1308,21 @@ async function fbDeleteTx(uid, id) {
 function fbListenRecurring(uid) {
   if (_unsubRecur) { try { _unsubRecur(); } catch(e){} _unsubRecur = null; }
   const { db, collection, onSnapshot } = F();
+  let _firstLoad = true;
   _unsubRecur = onSnapshot(collection(db, 'users', uid, 'recurring'), snap => {
     recurringTxs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const pg = document.querySelector('.page.active');
     if (pg && pg.id === 'page-recurring') renderRecurringPage();
     if (pg && pg.id === 'page-dashboard') renderDashboard();
+    // طبِّق المتكررات فور تحميلها أو إضافة واحدة جديدة
+    // _firstLoad: تأخير بسيط ليكتمل تحميل transactions أولاً
+    if(_firstLoad){
+      _firstLoad = false;
+      setTimeout(() => applyRecurringTxs(), 1500);
+    } else {
+      // تغيير لاحق (إضافة/حذف) → طبِّق فوراً
+      applyRecurringTxs();
+    }
   }, () => {});
 }
 
@@ -1483,9 +1493,7 @@ async function loadApp(firebaseUser) {
   budgets = userProfile.budgets || {};
 
   fbListenTx(firebaseUser.uid);
-  fbListenRecurring(firebaseUser.uid);
-  // تطبيق المتكررة بعد تحميل البيانات (300ms تأخير لضمان جهوزية recurringTxs)
-  setTimeout(() => applyRecurringTxs(), 2500);
+  fbListenRecurring(firebaseUser.uid); // يُشغّل applyRecurringTxs تلقائياً
   initNetworkMonitor();
   handleUrlParams();
 
@@ -2448,28 +2456,54 @@ async function deleteRecurring(id){
   catch(e){showToast('فشل الحذف','error');}
 }
 async function applyRecurringTxs(){
-  if(!recurringTxs.length||!currentUser)return;
-  const today=new Date().toISOString().split('T')[0];
+  if(!currentUser) return;
+  // انتظر حتى تُحمَّل البيانات من Firestore
+  if(!recurringTxs.length) return;
+  const today = new Date().toISOString().split('T')[0];
+  let applied = 0;
   for(const r of recurringTxs){
-    if(!_shouldRunToday(r,today))continue;
-    const tx={type:r.type,cat:r.cat,sub:'',amount:r.amount,note:r.name,date:today,createdAt:new Date().toISOString(),updatedAt:null};
-    try{
-      await fbAddTx(currentUser.uid,tx);
-      const{db,doc,setDoc}=F();
-      await setDoc(doc(db,'users',currentUser.uid,'recurring',r.id),{lastRun:today},{merge:true});
-    }catch(e){}
+    if(!_shouldRunToday(r, today)) continue;
+    const tx = {
+      type: r.type, cat: r.cat, sub: '', amount: r.amount,
+      note: r.name, date: today,
+      createdAt: new Date().toISOString(), updatedAt: null
+    };
+    try {
+      await fbAddTx(currentUser.uid, tx);
+      const { db, doc, setDoc } = F();
+      await setDoc(doc(db,'users',currentUser.uid,'recurring',r.id), {lastRun:today}, {merge:true});
+      applied++;
+    } catch(e) { console.warn('applyRecurringTxs error:', e); }
   }
+  if(applied > 0) showToast(`🔄 تم تطبيق ${applied} معاملة متكررة`, 'success');
 }
-function _shouldRunToday(r,today){
+
+function _shouldRunToday(r, today){
   const lastRun = r.lastRun || '';
-  if(lastRun===today)return false;
-  if(!r.startDate||today<r.startDate)return false;
-  const last  = lastRun ? new Date(lastRun+'T12:00:00') : null;
-  const start = new Date(r.startDate+'T12:00:00');
-  const now   = new Date(today+'T12:00:00');
-  if(r.freq==='monthly') return now.getDate()===start.getDate()&&(!last||now.getMonth()!==last.getMonth()||now.getFullYear()!==last.getFullYear());
-  if(r.freq==='weekly')  return now.getDay()===start.getDay()&&(!last||(now-last)>=6.5*24*60*60*1000);
-  if(r.freq==='yearly')  return now.getDate()===start.getDate()&&now.getMonth()===start.getMonth()&&(!last||now.getFullYear()!==last.getFullYear());
+  // إن طُبِّقت اليوم بالفعل → تخطَّ
+  if(lastRun === today) return false;
+  // إن لم يحِن تاريخ البدء بعد → تخطَّ
+  if(!r.startDate || today < r.startDate) return false;
+
+  // إن لم تُطبَّق قط → طبِّقها الآن (فور الإضافة)
+  if(!lastRun) return true;
+
+  const last  = new Date(lastRun  + 'T12:00:00');
+  const now   = new Date(today    + 'T12:00:00');
+
+  if(r.freq === 'monthly') {
+    // شهر كامل مرّ منذ آخر تطبيق
+    const monthsDiff = (now.getFullYear() - last.getFullYear()) * 12
+                     + (now.getMonth()   - last.getMonth());
+    return monthsDiff >= 1;
+  }
+  if(r.freq === 'weekly') {
+    // 7 أيام كاملة
+    return (now - last) >= 7 * 24 * 60 * 60 * 1000;
+  }
+  if(r.freq === 'yearly') {
+    return now.getFullYear() > last.getFullYear();
+  }
   return false;
 }
 function renderRecurringPage(){
