@@ -2416,16 +2416,12 @@ function _renderLockBiometric() {
         <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
       </svg>
     </div>
-    <div class="lock-msg" id="lock-msg">اضغط للتحقق بالبصمة أو قفل الشاشة</div>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:.6rem;margin-top:.5rem">
-      <button class="lock-add-btn" onclick="openModalFromLock()">⚡ إضافة معاملة بدون فتح</button>
-      <button class="lock-add-btn" onclick="_switchToPinFallback()" style="font-size:.78rem;opacity:.6">استخدام رمز PIN بدلاً</button>
-    </div>`;
-  // ابدأ التحقق تلقائياً بعد 300ms (تجربة أفضل)
-  setTimeout(() => { if (document.getElementById('lock-btn')) triggerBiometric(); }, 300);
+    <div class="lock-msg" id="lock-msg">اضغط على القفل للتحقق</div>
+    <button class="lock-add-btn" onclick="openModalFromLock()">⚡ إضافة معاملة بدون فتح</button>`;
+  // ❌ لا تحقق تلقائي — المستخدم يضغط بنفسه
 }
 
-// ── واجهة PIN ──
+// ── واجهة PIN — لوحة أرقام بالاتجاه الصحيح (LTR دائماً) ──
 function _renderLockPin(isSetup, subtitle) {
   const ls = document.getElementById('lock-screen');
   const title   = isSetup
@@ -2436,31 +2432,38 @@ function _renderLockPin(isSetup, subtitle) {
       ? (_pinSetupStep === 0 ? 'اختر رمزاً مكوناً من 4 أرقام' : 'أدخل الرمز مرة أخرى للتأكيد')
       : 'أدخل رمزك للوصول إلى بياناتك');
 
+  // لوحة الأرقام: ترتيب عالمي 1-2-3 / 4-5-6 / 7-8-9 / ⌫-0-OK
+  // direction:ltr على الـ grid لضمان الترتيب الصحيح بغض النظر عن لغة الصفحة
   ls.innerHTML = `
     <img src="logo.png" alt="وفرة" style="height:48px;filter:drop-shadow(0 2px 10px rgba(201,168,76,.25));">
     <div style="text-align:center">
       <div style="font-size:1.05rem;font-weight:600;color:var(--text-primary);margin-bottom:.3rem">${title}</div>
       <div class="lock-msg" id="lock-msg" style="min-height:1.4rem">${subtext}</div>
     </div>
-    <div id="pin-dots" style="display:flex;gap:.85rem;margin:.2rem 0">
+    <div id="pin-dots" style="display:flex;gap:.85rem;margin:.2rem 0;direction:ltr">
       ${[0,1,2,3].map(i=>`
-        <div id="pd-${i}" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--border);
-          background:transparent;transition:background .15s,border-color .15s"></div>`).join('')}
+        <div id="pd-${i}" style="width:16px;height:16px;border-radius:50%;
+          border:2px solid var(--border);background:transparent;
+          transition:background .15s,border-color .15s,transform .15s"></div>`).join('')}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,72px);gap:.6rem">
-      ${[1,2,3,4,5,6,7,8,9,'','0','⌫'].map(k => k==='' ? '<div></div>' : `
+    <div style="display:grid;grid-template-columns:repeat(3,72px);gap:.6rem;direction:ltr">
+      ${[1,2,3,4,5,6,7,8,9,'⌫','0','✓'].map(k => `
         <button onclick="_pinKey('${k}')"
-          style="height:64px;border-radius:14px;background:var(--obsidian-3);border:1px solid var(--border);
-            color:var(--text-primary);font-family:'Tajawal',sans-serif;font-size:${k==='⌫'?'1.3':'1.4'}rem;
-            font-weight:600;cursor:pointer;transition:background .1s,transform .1s;
-            -webkit-tap-highlight-color:transparent"
-          onpointerdown="this.style.background='var(--obsidian-4)';this.style.transform='scale(.93)'"
-          onpointerup="this.style.background='var(--obsidian-3)';this.style.transform=''"
-          onpointerleave="this.style.background='var(--obsidian-3)';this.style.transform=''"
+          style="height:64px;border-radius:14px;
+            background:${k==='✓'?'linear-gradient(135deg,var(--gold),var(--gold-dim))':k==='⌫'?'var(--obsidian-4)':'var(--obsidian-3)'};
+            border:1px solid ${k==='✓'?'transparent':'var(--border)'};
+            color:${k==='✓'?'var(--obsidian)':'var(--text-primary)'};
+            font-family:'Tajawal',sans-serif;
+            font-size:${k==='⌫'||k==='✓'?'1.2':'1.5'}rem;
+            font-weight:700;cursor:pointer;
+            -webkit-tap-highlight-color:transparent;
+            transition:transform .1s,opacity .1s"
+          onpointerdown="this.style.opacity='.7';this.style.transform='scale(.92)'"
+          onpointerup="this.style.opacity='1';this.style.transform=''"
+          onpointerleave="this.style.opacity='1';this.style.transform=''"
         >${k}</button>`).join('')}
     </div>
-    ${!isSetup ? `<button class="lock-add-btn" onclick="openModalFromLock()" style="margin-top:.3rem">⚡ إضافة معاملة بدون فتح</button>` : ''}
-    ${!isSetup && _lockMethod()==='pin' ? `` : ''}`;
+    ${!isSetup ? `<button class="lock-add-btn" onclick="openModalFromLock()" style="margin-top:.3rem">⚡ إضافة معاملة بدون فتح</button>` : ''}`;
   _pinBuffer = '';
   _updatePinDots();
 }
@@ -2514,16 +2517,24 @@ function _renderLockSetup() {
 
 // ── منطق PIN ──
 function _pinKey(k) {
-  const isSetup = (_lockMethod() === 'none' && _pinSetupStep >= 0 &&
-                   document.getElementById('pin-dots'));
   if (k === '⌫') {
     _pinBuffer = _pinBuffer.slice(0, -1);
-  } else if (_pinBuffer.length < 4) {
-    _pinBuffer += k;
+    _updatePinDots();
+    return;
   }
-  _updatePinDots();
-  if (_pinBuffer.length === 4) {
-    setTimeout(() => _pinSubmit(), 120);
+  if (k === '✓') {
+    // تأكيد فقط إن كان الرمز مكتملاً
+    if (_pinBuffer.length === 4) _pinSubmit();
+    return;
+  }
+  if (_pinBuffer.length < 4) {
+    _pinBuffer += k;
+    _updatePinDots();
+    // إرسال تلقائي عند اكتمال 4 أرقام فقط في وضع التحقق (وليس الإعداد)
+    // في وضع الإعداد: المستخدم يضغط ✓ للتأكيد بوضوح
+    if (_pinBuffer.length === 4 && _lockMethod() !== 'none') {
+      setTimeout(() => _pinSubmit(), 150);
+    }
   }
 }
 
@@ -2587,24 +2598,23 @@ function _setLockMsg(text, isError, color) {
 // ── إعداد البصمة ──
 async function _setupBiometric() {
   const bioBtn = document.getElementById('setup-bio-btn');
-  if (bioBtn) bioBtn.textContent = 'جارٍ التسجيل...';
+  if (bioBtn) { bioBtn.disabled = true; bioBtn.style.opacity = '.7'; }
   const ok = await _webAuthnSupported();
   if (!ok) {
-    if (bioBtn) bioBtn.textContent = 'غير مدعوم — استخدم PIN';
+    if (bioBtn) { bioBtn.disabled = false; bioBtn.style.opacity = ''; }
+    _setLockMsg('البصمة غير متاحة على هذا الجهاز', true);
     return;
   }
   const result = await _webAuthnRegister();
   if (result.ok) {
     hideLockScreen();
-  } else if (result.unsupported) {
-    _renderLockSetup();
-    const bioBtn2 = document.getElementById('setup-bio-btn');
-    if (bioBtn2) { bioBtn2.style.opacity='.45'; bioBtn2.querySelector('div div:last-child').textContent='غير متاح على هذا الجهاز'; }
   } else if (result.cancelled) {
+    // المستخدم ألغى — عُد لشاشة الاختيار
     _renderLockSetup();
   } else {
-    // فشل التسجيل — اذهب لـ PIN تلقائياً
-    _setupPin();
+    // أي فشل آخر — عُد لشاشة الاختيار مع رسالة
+    _renderLockSetup();
+    setTimeout(() => _setLockMsg('تعذّر تسجيل البصمة — فعّل قفل الشاشة في إعدادات جهازك', true), 50);
   }
 }
 
@@ -2624,16 +2634,16 @@ function _setupSkip() {
   hideLockScreen();
 }
 
-// ── تبديل للـ PIN من واجهة البصمة ──
+// ── تبديل للـ PIN — فقط إن كان PIN محفوظاً مسبقاً (fallback آمن) ──
+// لا يسمح بإنشاء PIN جديد من هنا — هذا يحدث فقط عند الإعداد الأول
 function _switchToPinFallback() {
-  if (!localStorage.getItem(PIN_HASH_KEY)) {
-    // لا يوجد PIN محفوظ — إعداد جديد
-    localStorage.setItem(LOCK_METHOD_KEY, 'none');
-    _setupPin();
-  } else {
+  if (localStorage.getItem(PIN_HASH_KEY)) {
     localStorage.setItem(LOCK_METHOD_KEY, 'pin');
     _pinBuffer = '';
     _renderLockPin(false);
+  } else {
+    // لا PIN محفوظ — لا يمكن التبديل، أعلم المستخدم فقط
+    _setLockMsg('لا يوجد رمز PIN محفوظ — استخدم البصمة', true);
   }
 }
 
@@ -2641,20 +2651,21 @@ function _switchToPinFallback() {
 async function triggerBiometric() {
   const btn = document.getElementById('lock-btn');
   if (!btn) return;
-  const msg = document.getElementById('lock-msg');
   btn.classList.add('pulse');
   _setLockMsg('جارٍ التحقق...');
 
   const supported = await _webAuthnSupported();
   if (!supported) {
     btn.classList.remove('pulse');
-    // جهاز بدون بصمة — تحوّل للـ PIN تلقائياً
+    // جهاز لا يدعم WebAuthn
     if (localStorage.getItem(PIN_HASH_KEY)) {
+      // يوجد PIN محفوظ — تحوّل إليه تلقائياً
       localStorage.setItem(LOCK_METHOD_KEY, 'pin');
-      _renderLockPin(false, 'البصمة غير متاحة — استخدم رمز PIN');
+      _renderLockPin(false, 'البصمة غير متاحة على هذا الجهاز — استخدم رمز PIN');
     } else {
-      // لا بصمة ولا PIN — أعِد الإعداد
+      // لا بصمة ولا PIN — أعِد الإعداد من البداية
       localStorage.removeItem(LOCK_METHOD_KEY);
+      localStorage.removeItem(CRED_KEY);
       _renderLockSetup();
     }
     return;
@@ -2662,8 +2673,8 @@ async function triggerBiometric() {
 
   const credId = localStorage.getItem(CRED_KEY);
   if (!credId) {
-    // لا credential مسجّل — أعِد التسجيل
     btn.classList.remove('pulse');
+    localStorage.removeItem(LOCK_METHOD_KEY);
     _renderLockSetup();
     return;
   }
@@ -2675,13 +2686,20 @@ async function triggerBiometric() {
     _setLockMsg('✓ مرحباً!', false, 'var(--success)');
     setTimeout(hideLockScreen, 280);
   } else if (result.needsRegister) {
+    // credential حُذف من الجهاز
     localStorage.removeItem(CRED_KEY);
-    localStorage.removeItem(LOCK_METHOD_KEY);
-    _renderLockSetup();
+    if (localStorage.getItem(PIN_HASH_KEY)) {
+      // يوجد PIN كـ fallback
+      localStorage.setItem(LOCK_METHOD_KEY, 'pin');
+      _renderLockPin(false, 'انتهت صلاحية البصمة — أدخل رمز PIN');
+    } else {
+      localStorage.removeItem(LOCK_METHOD_KEY);
+      _renderLockSetup();
+    }
   } else if (result.unsupported) {
     _switchToPinFallback();
   } else if (result.cancelled) {
-    _setLockMsg('اضغط للمحاولة مجدداً');
+    _setLockMsg('اضغط على القفل للمحاولة مجدداً');
   } else {
     _setLockMsg('فشل التحقق — اضغط مجدداً', true);
   }
