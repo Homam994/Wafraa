@@ -451,6 +451,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
   .bottom-nav{display:block}
   .fab{display:none}
   .page-header .btn-gold{display:none}
+  .page-header .btn-always-show{display:flex !important}
   /* Modal slides from top on mobile */
   .modal-overlay{align-items:flex-start;padding-top:env(safe-area-inset-top,0px)}
   .modal{border-radius:0 0 20px 20px;max-height:88dvh}
@@ -886,7 +887,7 @@ nav{flex:1;padding:1rem 0;overflow-y:auto;min-height:0}
       <div class="page" id="page-recurring">
         <div class="page-header">
           <div><div class="page-title">المتكررة التلقائية</div><div class="page-sub">مصاريف ومداخيل تُضاف تلقائياً كل دورة</div></div>
-          <button class="btn-gold" style="width:auto;padding:.6rem 1.5rem;font-size:.9rem" onclick="openRecurModal()">+ إضافة</button>
+          <button class="btn-gold btn-always-show" style="width:auto;padding:.6rem 1.5rem;font-size:.9rem" onclick="openRecurModal()">+ إضافة</button>
         </div>
         <div class="card" id="recur-list-card">
           <div id="recur-list"></div>
@@ -2441,7 +2442,14 @@ function _shouldRunToday(r,today){
 }
 function renderRecurringPage(){
   const list=document.getElementById('recur-list'); if(!list)return;
-  if(!recurringTxs.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">🔄</div><div class="empty-text">لا توجد معاملات متكررة</div></div>';return;}
+  if(!recurringTxs.length){
+    list.innerHTML=`<div class="empty-state">
+      <div class="empty-icon">🔄</div>
+      <div class="empty-text">لا توجد معاملات متكررة</div>
+      <button class="btn-gold" style="width:auto;padding:.65rem 1.5rem;font-size:.9rem;margin-top:1rem" onclick="openRecurModal()">+ أضف أول معاملة متكررة</button>
+    </div>`;
+    return;
+  }
   list.innerHTML=recurringTxs.map(r=>{
     const meta=CAT_META[r.cat]||{emoji:'💸',color:'#888'};
     const isInc=r.type==='income';
@@ -3237,6 +3245,73 @@ function initNetworkMonitor() {
 //  PWA SERVICE WORKER
 // ════════════════════════════════════════
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+// ════════════════════════════════════════
+//  SWIPE للتنقل بين صفحات bottom nav
+//  يمين → الصفحة السابقة | يسار → الصفحة التالية
+//  يعمل فقط على الموبايل (bottom nav ظاهر)
+// ════════════════════════════════════════
+(function(){
+  // ترتيب الصفحات في bottom nav (نفس ترتيب الأزرار)
+  const NAV_PAGES = ['dashboard','transactions','budget','reports'];
+
+  let _sx=0, _sy=0, _t0=0;
+
+  function _currentPage(){
+    const p = document.querySelector('.page.active');
+    return p ? p.id.replace('page-','') : 'dashboard';
+  }
+
+  function _isNavPage(name){ return NAV_PAGES.includes(name); }
+
+  function _isMobile(){ return window.innerWidth <= 900; }
+
+  // هل العنصر داخل منطقة scrollable (modal, list, etc.)
+  function _inScrollable(el){
+    while(el && el !== document.body){
+      const st = getComputedStyle(el);
+      if((st.overflowY==='auto'||st.overflowY==='scroll') && el.scrollHeight>el.clientHeight) return true;
+      el = el.parentElement;
+    }
+    return false;
+  }
+
+  document.addEventListener('touchstart', e=>{
+    // لا swipe إن كان المودال مفتوحاً
+    if(document.querySelector('.modal-overlay.open')) return;
+    _sx = e.touches[0].clientX;
+    _sy = e.touches[0].clientY;
+    _t0 = Date.now();
+  }, {passive:true});
+
+  document.addEventListener('touchend', e=>{
+    if(document.querySelector('.modal-overlay.open')) return;
+    if(!_isMobile()) return;
+
+    const dx = e.changedTouches[0].clientX - _sx;
+    const dy = e.changedTouches[0].clientY - _sy;
+    const dt = Date.now() - _t0;
+
+    // شروط الـ swipe: أفقي > رأسي، مسافة كافية، سريع
+    if(Math.abs(dx) < Math.abs(dy)) return;   // رأسي أكثر → تمرير عادي
+    if(Math.abs(dx) < 60) return;             // مسافة قصيرة جداً
+    if(dt > 400) return;                      // بطيء جداً
+    if(_inScrollable(e.target)) return;       // داخل قائمة scrollable
+
+    const cur = _currentPage();
+    const idx = NAV_PAGES.indexOf(cur);
+    if(idx === -1) return; // الصفحة الحالية ليست في nav
+
+    // RTL: swipe يمين (dx > 0) = السابقة، swipe يسار (dx < 0) = التالية
+    let nextIdx;
+    if(dx > 0)      nextIdx = idx - 1; // يمين → سابق
+    else            nextIdx = idx + 1; // يسار → تالي
+
+    if(nextIdx < 0 || nextIdx >= NAV_PAGES.length) return; // لا يوجد صفحة في هذا الاتجاه
+
+    goPage(NAV_PAGES[nextIdx]);
+  }, {passive:true});
+})();
 </script>
 </body>
 </html>
