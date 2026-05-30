@@ -2405,12 +2405,43 @@ async function saveRecurring(){
   const start=document.getElementById('recur-start').value;
   if(!amount||amount<=0){showToast('أدخل مبلغاً صحيحاً','error');return;}
   if(!name){showToast('أدخل اسماً للمعاملة','error');return;}
-  const data={type:_recurType,amount,name,cat,freq,startDate:start,lastRun:null,createdAt:new Date().toISOString()};
+  if(!start){showToast('حدد تاريخ البدء','error');return;}
+
+  // lastRun: '' بدلاً من null — Firestore يقبلها دائماً
+  const data={
+    type: _recurType, amount, name, cat, freq,
+    startDate: start,
+    lastRun: '',
+    createdAt: new Date().toISOString()
+  };
+
+  const btn = document.querySelector('#recur-modal-overlay .btn-next');
+  if(btn){ btn.disabled=true; btn.textContent='⏳...'; }
+
+  const TIMEOUT = 4000;
+  const withTimeout = p => Promise.race([p, new Promise((_,r)=>setTimeout(()=>r(new Error('TIMEOUT')),TIMEOUT))]);
+
   try{
-    if(_recurEditId){const{db,doc,setDoc}=F();await setDoc(doc(db,'users',currentUser.uid,'recurring',_recurEditId),data,{merge:true});}
-    else await fbAddRecurring(currentUser.uid,data);
-    closeRecurModal(); showToast('✓ تم الحفظ','success');
-  }catch(e){showToast('فشل الحفظ','error');}
+    if(_recurEditId){
+      const{db,doc,setDoc}=F();
+      await withTimeout(setDoc(doc(db,'users',currentUser.uid,'recurring',_recurEditId),data,{merge:true}));
+    } else {
+      await withTimeout(fbAddRecurring(currentUser.uid,data));
+    }
+    closeRecurModal();
+    showToast('✓ تم الحفظ','success');
+  } catch(e) {
+    // TIMEOUT = offline، Firestore خزّن محلياً
+    if(e.message==='TIMEOUT'||e.code==='unavailable'||!navigator.onLine){
+      closeRecurModal();
+      showToast('📱 حُفظ محلياً — سيُزامَن عند الاتصال','success');
+    } else {
+      console.error('saveRecurring error:', e.code, e.message);
+      showToast('فشل الحفظ: ' + (e.code||e.message||'خطأ غير معروف'), 'error');
+    }
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='💾 حفظ'; }
+  }
 }
 async function deleteRecurring(id){
   try{await fbDeleteRecurring(currentUser.uid,id);showToast('تم الحذف','success');}
@@ -2430,14 +2461,15 @@ async function applyRecurringTxs(){
   }
 }
 function _shouldRunToday(r,today){
-  if(r.lastRun===today)return false;
+  const lastRun = r.lastRun || '';
+  if(lastRun===today)return false;
   if(!r.startDate||today<r.startDate)return false;
-  const last=r.lastRun?new Date(r.lastRun+'T12:00:00'):null;
-  const start=new Date(r.startDate+'T12:00:00');
-  const now=new Date(today+'T12:00:00');
-  if(r.freq==='monthly')return now.getDate()===start.getDate()&&(!last||now.getMonth()!==last.getMonth()||now.getFullYear()!==last.getFullYear());
-  if(r.freq==='weekly')return now.getDay()===start.getDay()&&(!last||(now-last)>=6.5*24*60*60*1000);
-  if(r.freq==='yearly')return now.getDate()===start.getDate()&&now.getMonth()===start.getMonth()&&(!last||now.getFullYear()!==last.getFullYear());
+  const last  = lastRun ? new Date(lastRun+'T12:00:00') : null;
+  const start = new Date(r.startDate+'T12:00:00');
+  const now   = new Date(today+'T12:00:00');
+  if(r.freq==='monthly') return now.getDate()===start.getDate()&&(!last||now.getMonth()!==last.getMonth()||now.getFullYear()!==last.getFullYear());
+  if(r.freq==='weekly')  return now.getDay()===start.getDay()&&(!last||(now-last)>=6.5*24*60*60*1000);
+  if(r.freq==='yearly')  return now.getDate()===start.getDate()&&now.getMonth()===start.getMonth()&&(!last||now.getFullYear()!==last.getFullYear());
   return false;
 }
 function renderRecurringPage(){
