@@ -120,8 +120,8 @@ body.light ::-webkit-scrollbar-track { background: var(--obsidian-3); }
 body.light ::-webkit-scrollbar-thumb { background: var(--obsidian-4); }
 
 *{margin:0;padding:0;box-sizing:border-box}
-html{font-size:16px;overscroll-behavior:none;overflow:hidden}
-body{font-family:'Tajawal',sans-serif;background:var(--obsidian);color:var(--text-primary);min-height:100vh;overflow-x:hidden;overflow-y:auto;transition:background .3s,color .3s;-webkit-user-select:none;user-select:none;overscroll-behavior:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+html{font-size:16px;overscroll-behavior:none}
+body{font-family:'Tajawal',sans-serif;background:var(--obsidian);color:var(--text-primary);min-height:100vh;overflow-x:hidden;overflow-y:auto;transition:background .3s,color .3s;-webkit-user-select:none;user-select:none;overscroll-behavior:none;-webkit-overflow-scrolling:touch}
 
 /* ── LOADER ── */
 #global-loader{position:fixed;inset:0;background:var(--obsidian);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;transition:opacity .2s}
@@ -2816,44 +2816,42 @@ function initNetworkMonitor() {
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
 
 // ════════════════════════════════════════
-//  منع PULL-TO-REFRESH — Android TWA / Chrome
-//  CSS وحده لا يكفي في بعض إصدارات Android WebView
+//  منع PULL-TO-REFRESH فقط — بدون تعطيل التمرير
 // ════════════════════════════════════════
 (function() {
   let _startY = 0;
+  let _startX = 0;
 
   document.addEventListener('touchstart', e => {
     _startY = e.touches[0].clientY;
+    _startX = e.touches[0].clientX;
   }, { passive: true });
 
   document.addEventListener('touchmove', e => {
-    const dy      = e.touches[0].clientY - _startY;
-    const target  = e.target;
+    const dy = e.touches[0].clientY - _startY;
+    const dx = e.touches[0].clientX - _startX;
 
-    // إيجاد أقرب عنصر قابل للتمرير
-    let scrollable = target;
-    while (scrollable && scrollable !== document.body) {
-      const style    = getComputedStyle(scrollable);
-      const overflow = style.overflowY;
-      const canScroll = (overflow === 'auto' || overflow === 'scroll') &&
-                        scrollable.scrollHeight > scrollable.clientHeight;
-      if (canScroll) break;
-      scrollable = scrollable.parentElement;
-    }
+    // تجاهل إذا كان التمرير أفقياً أكثر من العمودي
+    if (Math.abs(dx) > Math.abs(dy)) return;
 
-    // منع السحب للأسفل فقط إذا:
-    // 1. الاتجاه للأسفل (dy > 0)
-    // 2. العنصر في أعلى الصفحة (scrollTop === 0)
-    if (dy > 0) {
-      const atTop = !scrollable || scrollable === document.body
-        ? window.scrollY === 0
-        : scrollable.scrollTop === 0;
+    // فقط إذا كان السحب للأسفل
+    if (dy <= 0) return;
 
-      if (atTop) {
-        e.preventDefault();
+    // إيجاد أقرب عنصر قابل للتمرير للأعلى
+    let el = e.target;
+    while (el && el !== document.documentElement) {
+      const st = getComputedStyle(el);
+      if ((st.overflowY === 'auto' || st.overflowY === 'scroll') &&
+           el.scrollHeight > el.clientHeight && el.scrollTop > 0) {
+        // العنصر يمكن تمريره وليس في الأعلى — اسمح بالتمرير
+        return;
       }
+      el = el.parentElement;
     }
-  }, { passive: false }); // passive: false ضروري لـ preventDefault
+
+    // وصلنا للأعلى — امنع pull-to-refresh
+    e.preventDefault();
+  }, { passive: false });
 })();
 </script>
 </body>
