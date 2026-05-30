@@ -120,8 +120,8 @@ body.light ::-webkit-scrollbar-track { background: var(--obsidian-3); }
 body.light ::-webkit-scrollbar-thumb { background: var(--obsidian-4); }
 
 *{margin:0;padding:0;box-sizing:border-box}
-html{font-size:16px}
-body{font-family:'Tajawal',sans-serif;background:var(--obsidian);color:var(--text-primary);min-height:100vh;overflow-x:hidden;transition:background .3s,color .3s;-webkit-user-select:none;user-select:none;overscroll-behavior-y:none;-webkit-overflow-scrolling:touch}
+html{font-size:16px;overscroll-behavior:none;overflow:hidden}
+body{font-family:'Tajawal',sans-serif;background:var(--obsidian);color:var(--text-primary);min-height:100vh;overflow-x:hidden;overflow-y:auto;transition:background .3s,color .3s;-webkit-user-select:none;user-select:none;overscroll-behavior:none;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
 
 /* ── LOADER ── */
 #global-loader{position:fixed;inset:0;background:var(--obsidian);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;transition:opacity .2s}
@@ -1579,7 +1579,6 @@ function exportData(format = 'csv') {
 function _exportCSV(headers, rows) {
   const SEP = ';';
 
-  // escape: لا نلفّ بالتنصيص إلا عند الحاجة الفعلية
   const esc = v => {
     const s = String(v ?? '');
     return (s.includes(SEP) || s.includes('"') || s.includes('\n') || s.includes('\r'))
@@ -1587,16 +1586,23 @@ function _exportCSV(headers, rows) {
       : s;
   };
 
-  // sep=; يجب أن يكون أول سطر بعد BOM مباشرة
   const lines = [
     'sep=;',
     headers.map(esc).join(SEP),
     ...rows.map(r => r.map(esc).join(SEP))
   ].join('\r\n');
 
-  // BOM كـ string مدمج مع النص — يضمن أن Blob يرى كل شيء كـ UTF-8 واحد
-  const BOM  = '\uFEFF';
-  const blob = new Blob([BOM + lines], { type: 'text/csv;charset=utf-8' });
+  // ── الطريقة الوحيدة المضمونة عبر Android/iOS/Desktop ──
+  // نحوّل النص يدوياً إلى UTF-8 bytes ثم نُضيف BOM كـ bytes صريحة
+  // هذا يمنع أي WebView أو متصفح من إعادة تفسير الـ encoding
+  const utf8  = new TextEncoder().encode(lines);        // UTF-8 bytes بدون BOM
+  const bom   = new Uint8Array([0xEF, 0xBB, 0xBF]);     // UTF-8 BOM bytes
+  const final = new Uint8Array(bom.length + utf8.length);
+  final.set(bom, 0);
+  final.set(utf8, bom.length);
+
+  // نُمرر ArrayBuffer وليس string — يمنع أي re-encoding من الـ Blob
+  const blob = new Blob([final.buffer], { type: 'application/octet-stream' });
 
   _download(blob, `وفرة-${_today()}.csv`);
   showToast(`تم تصدير ${rows.length} معاملة ✓`, 'success');
@@ -2808,6 +2814,47 @@ function initNetworkMonitor() {
 //  PWA SERVICE WORKER
 // ════════════════════════════════════════
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+// ════════════════════════════════════════
+//  منع PULL-TO-REFRESH — Android TWA / Chrome
+//  CSS وحده لا يكفي في بعض إصدارات Android WebView
+// ════════════════════════════════════════
+(function() {
+  let _startY = 0;
+
+  document.addEventListener('touchstart', e => {
+    _startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    const dy      = e.touches[0].clientY - _startY;
+    const target  = e.target;
+
+    // إيجاد أقرب عنصر قابل للتمرير
+    let scrollable = target;
+    while (scrollable && scrollable !== document.body) {
+      const style    = getComputedStyle(scrollable);
+      const overflow = style.overflowY;
+      const canScroll = (overflow === 'auto' || overflow === 'scroll') &&
+                        scrollable.scrollHeight > scrollable.clientHeight;
+      if (canScroll) break;
+      scrollable = scrollable.parentElement;
+    }
+
+    // منع السحب للأسفل فقط إذا:
+    // 1. الاتجاه للأسفل (dy > 0)
+    // 2. العنصر في أعلى الصفحة (scrollTop === 0)
+    if (dy > 0) {
+      const atTop = !scrollable || scrollable === document.body
+        ? window.scrollY === 0
+        : scrollable.scrollTop === 0;
+
+      if (atTop) {
+        e.preventDefault();
+      }
+    }
+  }, { passive: false }); // passive: false ضروري لـ preventDefault
+})();
 </script>
 </body>
 </html>
